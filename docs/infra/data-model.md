@@ -11,7 +11,7 @@
 | **분석 로그** | ~~`analyses`~~ | ~~001~~→**089 드롭** | **migration 089 DROP (2026-05-22)** — /admin/eval 제거 + writer(/api/analyze) 제거로 dead. |
 | | ~~`analysis_items`~~ | ~~002~~→**089 드롭** | **migration 089 DROP** — eval 상세 전용이었음 |
 | | ~~`analysis_sessions`~~ | ~~021~~→**087 드롭** | **migration 087 DROP (2026-05-22)** — 레거시 refine 세션. /api/analyze + user-voice 제거에 동반 |
-| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)** |
+| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** + **091** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)**. **091: category/color NOT NULL 강제 (2026-06-22)** |
 | | `product_embeddings` | **071** | FashionSigLIP(768) product image embeddings — `products` 에서 분리. halfvec(768) + HNSW halfvec_cosine_ops. `brand_multimodal_embeddings` (063) 와 대칭. v6 ranking 기반. **product_id bigint PK + FK → products.id ON DELETE CASCADE** |
 | | `product_reviews` | 019 | 상품 리뷰. **070 에서 product_id uuid→bigint swap** |
 | | ~~`product_ai_analysis`~~ | ~~012~~→**069 드랍** | **migration 069 (2026-05-18) 에서 CASCADE DROP. v6 embedding-first 는 PAI 비의존 (REQ-V6-031)** |
