@@ -5,6 +5,7 @@ import {usePathname} from "next/navigation"
 import {
     Activity,
     Bug,
+    ClipboardList,
     Database,
     FileText,
     Inbox,
@@ -39,6 +40,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "검수 큐",
     items: [
+      {href: "/admin/product-collection", label: "제품 수집 큐", description: "브랜드 공식몰 수집 요청", icon: ClipboardList},
       {href: "/admin/brand-node-review", label: "브랜드 검수", description: "브랜드 자동 분류 검수", icon: Inbox},
       {href: "/admin/brand-proposals", label: "메타 검수", description: "AI 메타 추론 (vibe·palette·...) 검수", icon: ListChecks},
     ],
