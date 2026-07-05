@@ -7,15 +7,16 @@
 #
 # 흐름:
 #   1. lint + test (CI 재검증, fail 시 배포 중단)
-#   2. Docker 이미지 빌드 (ARM64 네이티브 러너, Next.js standalone) + ECR Push
-#   3. DB 마이그레이션 적용 (schema_migrations 기준 database/migrations/ 미적용분만 순차 실행)
+#   2. Docker 이미지 빌드 (ARM64 네이티브 러너, Next.js standalone)
+#   3. ECR Push (태그: <YYYYMMDDhhmmss>-<short_sha>, latest)
 #   4. SSH로 dev-app EC2 접속 → /home/ec2-user/scripts/deploy.app.sh 실행
 #
 # Reference: kikoai/ai 의 deploy-dev.yml (동일 패턴)
 # Repo: portal/dev/app (ECR), 이미 portal-ai-gha IAM user 가 portal/dev/* prefix push 권한 보유
 #
-# 필요 secret: MIGRATION_DATABASE_URL — public 스키마 DDL/GRANT 권한 있는 Postgres 계정
-# 연결 문자열(app_user/ai_user는 권한 없음, 런타임 DATABASE_URL과 별개). scripts/run-migrations.ts 참고.
+# DB 마이그레이션(database/migrations/*.sql)은 CI 미포함 — ai-server(alembic)와 동일하게
+# public 스키마 DDL 권한 있는 계정으로 사람이 직접 실행: `pnpm db:migrate`
+# (schema_migrations 테이블로 이력 추적, scripts/run-migrations.ts 참고).
 # ==============================================================================
 
 name: 🚀 Deploy to AWS
@@ -138,43 +139,11 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================
-  # Job 3: DB 마이그레이션 적용
-  # ============================================
-  migrate:
-    name: DB 마이그레이션
-    needs: verify
-    runs-on: ubuntu-latest
-    environment: dev
-
-    steps:
-      - name: 코드 체크아웃
-        uses: actions/checkout@v4
-
-      - name: pnpm 셋업
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.23.0
-
-      - name: Node 셋업
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: 의존성 설치
-        run: pnpm install --frozen-lockfile
-
-      - name: 마이그레이션 적용 (schema_migrations 기준 미적용분만)
-        env:
-          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-        run: pnpm exec tsx scripts/run-migrations.ts
-
-  # ============================================
-  # Job 4: dev-app EC2 배포
+  # Job 3: dev-app EC2 배포
   # ============================================
   deploy:
     name: dev-app 배포
-    needs: [build-and-push, migrate]
+    needs: build-and-push
     runs-on: ubuntu-latest
     environment: dev
 
