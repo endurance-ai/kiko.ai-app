@@ -1,16 +1,10 @@
 "use client"
 
 import {useCallback, useEffect, useMemo, useState} from "react"
-import {ExternalLink, Plus, RefreshCw, Save, Send} from "lucide-react"
+import {AlertTriangle, ExternalLink, RefreshCw, Save} from "lucide-react"
 import {cn} from "@/lib/utils"
 
-type PlannerStatus =
-  | "planner_draft"
-  | "planner_classified"
-  | "product_collection_requested"
-  | "cancelled"
-
-type TechStatus =
+type CrawlStatus =
   | "not_started"
   | "tech_detected"
   | "needs_config"
@@ -27,34 +21,35 @@ type TechStatus =
 
 type ConfigStatus = "not_started" | "needed" | "ready" | "blocked"
 type PlatformType = "unknown" | "cafe24" | "shopify" | "custom" | "uniqlo" | "zara" | "29cm" | "farfetch"
-type PriceBand = "unknown" | "budget" | "mid" | "premium" | "luxury"
 
-type Target = {
-  id: number
+type Brand = {
+  brand_node_id: number
   brand_name: string
-  homepage_url: string
-  gender_scope: string[]
-  price_band: PriceBand
-  priority: number
-  planner_status: PlannerStatus
-  planner_notes: string | null
-  requested_at: string | null
+  brand_name_normalized: string | null
+  gender_scope: string[] | null
+  source_platforms: string[] | null
+  price_min_usd: number | string | null
+  price_max_usd: number | string | null
+  homepage_url: string | null
+  wiki_status: string | null
+  brand_updated_at: string | null
+  status_updated_at: string | null
+  has_status_row: boolean
+  status: CrawlStatus
+  config_status: ConfigStatus
   platform_key: string | null
   platform_type: PlatformType
   category_discovery: string
-  tech_status: TechStatus
-  config_status: ConfigStatus
   latest_artifact_path: string | null
   qc_summary: Record<string, unknown>
   last_error: string | null
   blocked_reason: string | null
-  tech_notes: string | null
-  updated_at: string
+  notes: string | null
 }
 
 type Run = {
   id: number
-  target_id: number | null
+  brand_node_id: number
   stage: string
   status: string
   started_at: string
@@ -69,23 +64,16 @@ type Run = {
 }
 
 type ListResponse = {
-  targets: Target[]
+  brands: Brand[]
   runs: Run[]
   total: number
   limit: number
   offset: number
 }
 
-type Draft = Partial<Pick<Target, "planner_status" | "tech_status" | "config_status" | "platform_type" | "platform_key" | "tech_notes" | "blocked_reason">>
+type Draft = Partial<Pick<Brand, "status" | "config_status" | "platform_type" | "platform_key" | "notes" | "blocked_reason">>
 
-const PLANNER_STATUSES: PlannerStatus[] = [
-  "planner_draft",
-  "planner_classified",
-  "product_collection_requested",
-  "cancelled",
-]
-
-const TECH_STATUSES: TechStatus[] = [
+const CRAWL_STATUSES: CrawlStatus[] = [
   "not_started",
   "tech_detected",
   "needs_config",
@@ -103,17 +91,8 @@ const TECH_STATUSES: TechStatus[] = [
 
 const CONFIG_STATUSES: ConfigStatus[] = ["not_started", "needed", "ready", "blocked"]
 const PLATFORM_TYPES: PlatformType[] = ["unknown", "cafe24", "shopify", "custom", "uniqlo", "zara", "29cm", "farfetch"]
-const PRICE_BANDS: PriceBand[] = ["unknown", "budget", "mid", "premium", "luxury"]
-const GENDERS = ["women", "men", "unisex"] as const
 
-const PLANNER_LABEL: Record<PlannerStatus, string> = {
-  planner_draft: "초안",
-  planner_classified: "기획 분류",
-  product_collection_requested: "수집 요청",
-  cancelled: "취소",
-}
-
-const TECH_LABEL: Record<TechStatus, string> = {
+const STATUS_LABEL: Record<CrawlStatus, string> = {
   not_started: "대기",
   tech_detected: "탐지됨",
   needs_config: "설정 필요",
@@ -129,16 +108,16 @@ const TECH_LABEL: Record<TechStatus, string> = {
   blocked: "차단",
 }
 
-const PRICE_LABEL: Record<PriceBand, string> = {
-  unknown: "미정",
-  budget: "저가",
-  mid: "중가",
-  premium: "프리미엄",
-  luxury: "럭셔리",
+const CONFIG_LABEL: Record<ConfigStatus, string> = {
+  not_started: "설정 대기",
+  needed: "설정 필요",
+  ready: "설정 완료",
+  blocked: "설정 차단",
 }
 
 const statusTone: Record<string, string> = {
-  product_collection_requested: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  tech_detected: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  config_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   crawl_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   import_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
@@ -153,27 +132,22 @@ export function ProductCollectionPage() {
   const [list, setList] = useState<ListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<number | "new" | null>(null)
+  const [saving, setSaving] = useState<number | null>(null)
   const [drafts, setDrafts] = useState<Record<number, Draft>>({})
 
   const [q, setQ] = useState("")
-  const [plannerFilter, setPlannerFilter] = useState("")
-  const [techFilter, setTechFilter] = useState("")
-
-  const [brandName, setBrandName] = useState("")
-  const [homepageUrl, setHomepageUrl] = useState("")
-  const [genderScope, setGenderScope] = useState<string[]>(["women"])
-  const [priceBand, setPriceBand] = useState<PriceBand>("mid")
-  const [priority, setPriority] = useState(3)
-  const [plannerNotes, setPlannerNotes] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [platformFilter, setPlatformFilter] = useState("")
+  const [urlFilter, setUrlFilter] = useState("")
 
   const fetchList = useCallback(async () => {
     setLoading(true)
     setError(null)
     const params = new URLSearchParams({limit: "100"})
     if (q.trim()) params.set("q", q.trim())
-    if (plannerFilter) params.set("planner_status", plannerFilter)
-    if (techFilter) params.set("tech_status", techFilter)
+    if (statusFilter) params.set("status", statusFilter)
+    if (platformFilter) params.set("platform_type", platformFilter)
+    if (urlFilter) params.set("url", urlFilter)
     try {
       const res = await fetch(`/api/admin/product-collection?${params}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -185,27 +159,27 @@ export function ProductCollectionPage() {
     } finally {
       setLoading(false)
     }
-  }, [plannerFilter, q, techFilter])
+  }, [platformFilter, q, statusFilter, urlFilter])
 
   useEffect(() => {
     fetchList()
   }, [fetchList])
 
-  const latestRunByTarget = useMemo(() => {
+  const latestRunByBrand = useMemo(() => {
     const map = new Map<number, Run>()
     for (const run of list?.runs ?? []) {
-      if (run.target_id && !map.has(run.target_id)) map.set(run.target_id, run)
+      if (!map.has(run.brand_node_id)) map.set(run.brand_node_id, run)
     }
     return map
   }, [list])
 
   const summary = useMemo(() => {
-    const targets = list?.targets ?? []
+    const brands = list?.brands ?? []
     return {
-      requested: targets.filter((t) => t.planner_status === "product_collection_requested").length,
-      crawlReady: targets.filter((t) => t.tech_status === "crawl_ready").length,
-      importReady: targets.filter((t) => t.tech_status === "import_ready").length,
-      active: targets.filter((t) => t.tech_status === "active").length,
+      notStarted: brands.filter((b) => b.status === "not_started").length,
+      missingUrl: brands.filter((b) => !b.homepage_url).length,
+      configReady: brands.filter((b) => b.status === "config_ready" || b.status === "crawl_ready").length,
+      importReady: brands.filter((b) => b.status === "import_ready").length,
     }
   }, [list])
 
@@ -213,42 +187,7 @@ export function ProductCollectionPage() {
     setDrafts((prev) => ({...prev, [id]: {...prev[id], ...patch}}))
   }
 
-  const createTarget = async () => {
-    if (!brandName.trim() || !homepageUrl.trim()) return
-    setSaving("new")
-    setError(null)
-    try {
-      const res = await fetch("/api/admin/product-collection", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          brand_name: brandName,
-          homepage_url: homepageUrl,
-          gender_scope: genderScope,
-          price_band: priceBand,
-          priority,
-          planner_notes: plannerNotes,
-        }),
-      })
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {error?: string}
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      setBrandName("")
-      setHomepageUrl("")
-      setGenderScope(["women"])
-      setPriceBand("mid")
-      setPriority(3)
-      setPlannerNotes("")
-      await fetchList()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSaving(null)
-    }
-  }
-
-  const patchTarget = async (id: number, patch: Record<string, unknown>) => {
+  const patchBrand = async (id: number, patch: Record<string, unknown>) => {
     setSaving(id)
     setError(null)
     try {
@@ -269,84 +208,20 @@ export function ProductCollectionPage() {
     }
   }
 
-  const saveDraft = (target: Target) => {
-    const draft = drafts[target.id]
+  const saveDraft = (brand: Brand) => {
+    const draft = drafts[brand.brand_node_id]
     if (!draft) return
-    patchTarget(target.id, draft)
-  }
-
-  const toggleGender = (gender: string) => {
-    setGenderScope((prev) => (
-      prev.includes(gender) ? prev.filter((g) => g !== gender) : [...prev, gender]
-    ))
+    patchBrand(brand.brand_node_id, draft)
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Summary label="수집 요청" value={summary.requested} />
-        <Summary label="크롤 준비" value={summary.crawlReady} />
+        <Summary label="미시작" value={summary.notStarted} />
+        <Summary label="URL 없음" value={summary.missingUrl} />
+        <Summary label="크롤 준비" value={summary.configReady} />
         <Summary label="적재 준비" value={summary.importReady} />
-        <Summary label="활성" value={summary.active} />
       </div>
-
-      <section className="rounded-md border border-border bg-muted/10 p-3">
-        <div className="grid gap-2 lg:grid-cols-[1.1fr_1.4fr_1fr_1fr_80px_auto]">
-          <input
-            value={brandName}
-            onChange={(e) => setBrandName(e.target.value)}
-            placeholder="브랜드명"
-            className="h-9 rounded border border-border bg-background px-3 text-sm outline-none focus:border-foreground"
-          />
-          <input
-            value={homepageUrl}
-            onChange={(e) => setHomepageUrl(e.target.value)}
-            placeholder="공식몰 URL"
-            className="h-9 rounded border border-border bg-background px-3 text-sm outline-none focus:border-foreground"
-          />
-          <div className="flex h-9 items-center gap-1 rounded border border-border bg-background px-2">
-            {GENDERS.map((gender) => (
-              <label key={gender} className="flex items-center gap-1 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={genderScope.includes(gender)}
-                  onChange={() => toggleGender(gender)}
-                />
-                {gender}
-              </label>
-            ))}
-          </div>
-          <select
-            value={priceBand}
-            onChange={(e) => setPriceBand(e.target.value as PriceBand)}
-            className="h-9 rounded border border-border bg-background px-2 text-sm outline-none focus:border-foreground"
-          >
-            {PRICE_BANDS.map((band) => <option key={band} value={band}>{PRICE_LABEL[band]}</option>)}
-          </select>
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={priority}
-            onChange={(e) => setPriority(Number(e.target.value))}
-            className="h-9 rounded border border-border bg-background px-2 text-sm outline-none focus:border-foreground"
-          />
-          <button
-            onClick={createTarget}
-            disabled={saving === "new" || !brandName.trim() || !homepageUrl.trim()}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded border border-border bg-foreground px-3 text-sm text-background disabled:opacity-50"
-          >
-            <Plus className="size-4" />
-            등록
-          </button>
-        </div>
-        <textarea
-          value={plannerNotes}
-          onChange={(e) => setPlannerNotes(e.target.value)}
-          placeholder="기획 메모"
-          className="mt-2 min-h-16 w-full rounded border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground"
-        />
-      </section>
 
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <input
@@ -356,20 +231,29 @@ export function ProductCollectionPage() {
           className="h-9 flex-1 rounded border border-border bg-background px-3 text-sm outline-none focus:border-foreground"
         />
         <select
-          value={plannerFilter}
-          onChange={(e) => setPlannerFilter(e.target.value)}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
           className="h-9 rounded border border-border bg-background px-2 text-sm outline-none focus:border-foreground"
         >
-          <option value="">기획 전체</option>
-          {PLANNER_STATUSES.map((status) => <option key={status} value={status}>{PLANNER_LABEL[status]}</option>)}
+          <option value="">상태 전체</option>
+          {CRAWL_STATUSES.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}
         </select>
         <select
-          value={techFilter}
-          onChange={(e) => setTechFilter(e.target.value)}
+          value={platformFilter}
+          onChange={(e) => setPlatformFilter(e.target.value)}
           className="h-9 rounded border border-border bg-background px-2 text-sm outline-none focus:border-foreground"
         >
-          <option value="">기술 전체</option>
-          {TECH_STATUSES.map((status) => <option key={status} value={status}>{TECH_LABEL[status]}</option>)}
+          <option value="">플랫폼 전체</option>
+          {PLATFORM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+        <select
+          value={urlFilter}
+          onChange={(e) => setUrlFilter(e.target.value)}
+          className="h-9 rounded border border-border bg-background px-2 text-sm outline-none focus:border-foreground"
+        >
+          <option value="">URL 전체</option>
+          <option value="present">URL 있음</option>
+          <option value="missing">URL 없음</option>
         </select>
         <button
           onClick={fetchList}
@@ -392,89 +276,91 @@ export function ProductCollectionPage() {
           <thead className="bg-muted/30 text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-3 py-2">브랜드</th>
-              <th className="px-3 py-2">기획</th>
-              <th className="px-3 py-2">기술</th>
+              <th className="px-3 py-2">홈페이지</th>
+              <th className="px-3 py-2">상태</th>
               <th className="px-3 py-2">플랫폼</th>
               <th className="px-3 py-2">QC</th>
               <th className="px-3 py-2">최근 실행</th>
-              <th className="px-3 py-2 text-right">작업</th>
+              <th className="px-3 py-2 text-right">저장</th>
             </tr>
           </thead>
           <tbody>
             {loading && !list ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={7}>불러오는 중</td></tr>
-            ) : (list?.targets.length ?? 0) === 0 ? (
+            ) : (list?.brands.length ?? 0) === 0 ? (
               <tr><td className="px-3 py-8 text-center text-muted-foreground" colSpan={7}>대상 없음</td></tr>
             ) : (
-              list!.targets.map((target) => {
-                const draft = drafts[target.id] ?? {}
-                const latestRun = latestRunByTarget.get(target.id)
-                const plannerStatus = draft.planner_status ?? target.planner_status
-                const techStatus = draft.tech_status ?? target.tech_status
+              list!.brands.map((brand) => {
+                const id = brand.brand_node_id
+                const draft = drafts[id] ?? {}
+                const latestRun = latestRunByBrand.get(id)
+                const status = draft.status ?? brand.status
                 return (
-                  <tr key={target.id} className="border-t border-border align-top">
-                    <td className="w-[260px] px-3 py-3">
-                      <div className="font-medium">{target.brand_name}</div>
-                      <a
-                        href={target.homepage_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-1 inline-flex max-w-[240px] items-center gap-1 truncate text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <ExternalLink className="size-3" />
-                        {target.homepage_url}
-                      </a>
+                  <tr key={id} className="border-t border-border align-top">
+                    <td className="w-[240px] px-3 py-3">
+                      <div className="font-medium">{brand.brand_name}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">brand_node #{id}</div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {target.gender_scope.map((gender) => <Badge key={gender}>{gender}</Badge>)}
-                        <Badge>{PRICE_LABEL[target.price_band]}</Badge>
-                        <Badge>P{target.priority}</Badge>
+                        {(brand.gender_scope ?? []).map((gender) => <Badge key={gender}>{gender}</Badge>)}
+                        {(brand.source_platforms ?? []).slice(0, 3).map((platform) => <Badge key={platform}>{platform}</Badge>)}
+                        {priceRange(brand) && <Badge>{priceRange(brand)}</Badge>}
                       </div>
                     </td>
-                    <td className="w-[190px] px-3 py-3">
-                      <select
-                        value={plannerStatus}
-                        onChange={(e) => updateDraft(target.id, {planner_status: e.target.value as PlannerStatus})}
-                        className="h-8 w-full rounded border border-border bg-background px-2 text-xs"
-                      >
-                        {PLANNER_STATUSES.map((status) => <option key={status} value={status}>{PLANNER_LABEL[status]}</option>)}
-                      </select>
-                      <StatusPill value={plannerStatus} label={PLANNER_LABEL[plannerStatus]} />
-                      {target.requested_at && <div className="mt-1 text-[11px] text-muted-foreground">{relativeTime(target.requested_at)}</div>}
+                    <td className="w-[240px] px-3 py-3 text-xs">
+                      {brand.homepage_url ? (
+                        <a
+                          href={brand.homepage_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex max-w-[220px] items-center gap-1 truncate text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="size-3" />
+                          {brand.homepage_url}
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-300">
+                          <AlertTriangle className="size-3.5" />
+                          URL 없음
+                        </span>
+                      )}
+                      {brand.wiki_status && <div className="mt-1 text-muted-foreground">wiki {brand.wiki_status}</div>}
                     </td>
-                    <td className="w-[190px] px-3 py-3">
+                    <td className="w-[210px] px-3 py-3">
                       <select
-                        value={techStatus}
-                        onChange={(e) => updateDraft(target.id, {tech_status: e.target.value as TechStatus})}
+                        value={status}
+                        onChange={(e) => updateDraft(id, {status: e.target.value as CrawlStatus})}
                         className="h-8 w-full rounded border border-border bg-background px-2 text-xs"
                       >
-                        {TECH_STATUSES.map((status) => <option key={status} value={status}>{TECH_LABEL[status]}</option>)}
+                        {CRAWL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                       </select>
                       <select
-                        value={draft.config_status ?? target.config_status}
-                        onChange={(e) => updateDraft(target.id, {config_status: e.target.value as ConfigStatus})}
+                        value={draft.config_status ?? brand.config_status}
+                        onChange={(e) => updateDraft(id, {config_status: e.target.value as ConfigStatus})}
                         className="mt-1 h-8 w-full rounded border border-border bg-background px-2 text-xs"
                       >
-                        {CONFIG_STATUSES.map((status) => <option key={status} value={status}>config {status}</option>)}
+                        {CONFIG_STATUSES.map((s) => <option key={s} value={s}>{CONFIG_LABEL[s]}</option>)}
                       </select>
-                      {target.last_error && <div className="mt-1 line-clamp-2 text-[11px] text-red-300">{target.last_error}</div>}
+                      <StatusPill value={status} label={STATUS_LABEL[status]} />
+                      {brand.last_error && <div className="mt-1 line-clamp-2 text-[11px] text-red-300">{brand.last_error}</div>}
                     </td>
                     <td className="w-[210px] px-3 py-3">
                       <input
-                        value={draft.platform_key ?? target.platform_key ?? ""}
-                        onChange={(e) => updateDraft(target.id, {platform_key: e.target.value})}
+                        value={draft.platform_key ?? brand.platform_key ?? ""}
+                        onChange={(e) => updateDraft(id, {platform_key: e.target.value})}
                         placeholder="platform key"
                         className="h-8 w-full rounded border border-border bg-background px-2 text-xs"
                       />
                       <select
-                        value={draft.platform_type ?? target.platform_type}
-                        onChange={(e) => updateDraft(target.id, {platform_type: e.target.value as PlatformType})}
+                        value={draft.platform_type ?? brand.platform_type}
+                        onChange={(e) => updateDraft(id, {platform_type: e.target.value as PlatformType})}
                         className="mt-1 h-8 w-full rounded border border-border bg-background px-2 text-xs"
                       >
                         {PLATFORM_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                       </select>
+                      <div className="mt-1 text-[11px] text-muted-foreground">{brand.category_discovery}</div>
                     </td>
                     <td className="w-[170px] px-3 py-3 text-xs">
-                      <QcSummary summary={target.qc_summary} artifact={target.latest_artifact_path} />
+                      <QcSummary summary={brand.qc_summary} artifact={brand.latest_artifact_path} />
                     </td>
                     <td className="w-[170px] px-3 py-3 text-xs">
                       {latestRun ? (
@@ -487,27 +373,15 @@ export function ProductCollectionPage() {
                         <span className="text-muted-foreground">없음</span>
                       )}
                     </td>
-                    <td className="w-[160px] px-3 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        {target.planner_status !== "product_collection_requested" && (
-                          <button
-                            onClick={() => patchTarget(target.id, {planner_status: "product_collection_requested"})}
-                            disabled={saving === target.id}
-                            className="inline-flex h-8 items-center gap-1 rounded border border-border px-2 text-xs hover:bg-muted/40 disabled:opacity-50"
-                          >
-                            <Send className="size-3.5" />
-                            요청
-                          </button>
-                        )}
-                        <button
-                          onClick={() => saveDraft(target)}
-                          disabled={saving === target.id || !drafts[target.id]}
-                          className="inline-flex h-8 items-center gap-1 rounded border border-border px-2 text-xs hover:bg-muted/40 disabled:opacity-50"
-                        >
-                          <Save className="size-3.5" />
-                          저장
-                        </button>
-                      </div>
+                    <td className="w-[100px] px-3 py-3 text-right">
+                      <button
+                        onClick={() => saveDraft(brand)}
+                        disabled={saving === id || !drafts[id]}
+                        className="inline-flex h-8 items-center gap-1 rounded border border-border px-2 text-xs hover:bg-muted/40 disabled:opacity-50"
+                      >
+                        <Save className="size-3.5" />
+                        저장
+                      </button>
                     </td>
                   </tr>
                 )
@@ -524,7 +398,7 @@ export function ProductCollectionPage() {
             <thead className="bg-muted/30 text-left text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">시간</th>
-                <th className="px-3 py-2">대상</th>
+                <th className="px-3 py-2">브랜드</th>
                 <th className="px-3 py-2">단계</th>
                 <th className="px-3 py-2">상태</th>
                 <th className="px-3 py-2">지표</th>
@@ -535,7 +409,7 @@ export function ProductCollectionPage() {
               {(list?.runs ?? []).slice(0, 30).map((run) => (
                 <tr key={run.id} className="border-t border-border">
                   <td className="px-3 py-2 text-muted-foreground">{relativeTime(run.started_at)}</td>
-                  <td className="px-3 py-2">{targetLabel(list?.targets ?? [], run.target_id)}</td>
+                  <td className="px-3 py-2">{brandLabel(list?.brands ?? [], run.brand_node_id)}</td>
                   <td className="px-3 py-2">{run.stage}</td>
                   <td className="px-3 py-2"><StatusPill value={run.status} label={run.status} /></td>
                   <td className="max-w-[320px] truncate px-3 py-2 text-muted-foreground">{formatMetrics(run.metrics)}</td>
@@ -602,10 +476,9 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString("ko-KR")
 }
 
-function targetLabel(targets: Target[], id: number | null): string {
-  if (!id) return "-"
-  const target = targets.find((t) => t.id === id)
-  return target ? target.brand_name : `#${id}`
+function brandLabel(brands: Brand[], id: number): string {
+  const brand = brands.find((b) => b.brand_node_id === id)
+  return brand ? brand.brand_name : `#${id}`
 }
 
 function formatMetrics(metrics: Record<string, unknown>): string {
@@ -614,4 +487,13 @@ function formatMetrics(metrics: Record<string, unknown>): string {
     .filter((key) => metrics[key] !== undefined)
     .map((key) => `${key}=${String(metrics[key])}`)
   return parts.length > 0 ? parts.join(" · ") : JSON.stringify(metrics)
+}
+
+function priceRange(brand: Brand): string | null {
+  const min = brand.price_min_usd != null ? Number(brand.price_min_usd) : null
+  const max = brand.price_max_usd != null ? Number(brand.price_max_usd) : null
+  if (min == null && max == null) return null
+  if (min != null && max != null) return `$${Math.round(min)}-${Math.round(max)}`
+  if (min != null) return `$${Math.round(min)}+`
+  return `~$${Math.round(max ?? 0)}`
 }
