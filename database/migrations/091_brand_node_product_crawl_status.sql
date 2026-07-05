@@ -1,5 +1,6 @@
 -- 091_brand_node_product_crawl_status.sql
 -- Track product crawling state against brand_nodes, not an URL-first queue.
+-- Kept idempotent so the deploy pipeline can safely apply this catch-up migration.
 
 BEGIN;
 

@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 # 같은 ref 의 동시 deploy 직렬화 (취소하지 않음)
 concurrency:
@@ -144,6 +145,105 @@ jobs:
     environment: dev
 
     steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 변경된 migration 목록 수집
+        id: changed-migrations
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs")
+            let migrations = []
+
+            if (context.eventName === "pull_request") {
+              const pr = context.payload.pull_request
+              if (pr?.merged) {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  per_page: 100,
+                })
+                migrations = files
+                  .filter((file) => file.status !== "removed")
+                  .map((file) => file.filename)
+                  .filter((name) => /^database\/migrations\/.+\.sql$/.test(name))
+                  .sort()
+              }
+            }
+
+            fs.writeFileSync("changed-migrations.txt", migrations.join("\n") + (migrations.length ? "\n" : ""))
+            core.setOutput("has_migrations", migrations.length > 0 ? "true" : "false")
+            core.setOutput("count", String(migrations.length))
+            core.info(migrations.length > 0 ? `Changed migrations:\n${migrations.join("\n")}` : "No changed migrations")
+
+      - name: migration bundle 준비
+        if: steps.changed-migrations.outputs.has_migrations == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf migration-upload
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            if [ ! -f "$file" ]; then
+              echo "::error::Migration file not found: $file"
+              exit 1
+            fi
+            mkdir -p "migration-upload/$(dirname "$file")"
+            cp "$file" "migration-upload/$file"
+          done < changed-migrations.txt
+          find migration-upload -type f -name '*.sql' | sort
+
+      - name: migration bundle 업로드
+        if: steps.changed-migrations.outputs.has_migrations == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "migration-upload"
+          target: "/tmp/kikoai-app-migrations-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: DB migration 적용
+        if: steps.changed-migrations.outputs.has_migrations == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+
+            MIGRATION_ROOT="/tmp/kikoai-app-migrations-${{ github.run_id }}-${{ github.run_attempt }}"
+            MIGRATION_DIR="${MIGRATION_ROOT}/migration-upload/database/migrations"
+            DB_CONTAINER="${DB_CONTAINER:-db}"
+
+            if [ ! -d "$MIGRATION_DIR" ]; then
+              echo "[ERROR] migration directory not found: $MIGRATION_DIR"
+              exit 1
+            fi
+
+            DB_NAME=$(docker exec "$DB_CONTAINER" sh -lc 'printf "%s" "${POSTGRES_DB:-postgres}"')
+            DB_USER=$(docker exec "$DB_CONTAINER" sh -lc 'printf "%s" "${POSTGRES_USER:-postgres}"')
+
+            echo "=========================================="
+            echo "[kiko.ai-app DEV] DB migration 적용"
+            echo "Container: ${DB_CONTAINER}"
+            echo "Database: ${DB_NAME}"
+            echo "Files: ${{ steps.changed-migrations.outputs.count }}"
+            echo "=========================================="
+
+            find "$MIGRATION_DIR" -type f -name '*.sql' | sort | while IFS= read -r file; do
+              echo ">>> Applying $(basename "$file")"
+              docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" < "$file"
+            done
+
+            echo ">>> Reloading PostgREST schema cache"
+            docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" \
+              -c "NOTIFY pgrst, 'reload schema';"
+
+            rm -rf "$MIGRATION_ROOT"
+
       - name: SSH 배포
         uses: appleboy/ssh-action@v1.0.3
         with:
