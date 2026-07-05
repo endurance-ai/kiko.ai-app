@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed:eval": "dotenv -e .env.local -- tsx scripts/seed-eval-golden-queries.ts",
+    "create-admin": "dotenv -e .env.local -- tsx scripts/create-admin.ts",
     "db:migrate": "dotenv -e .env.local -- tsx scripts/run-migrations.ts"
   },
   "dependencies": {
