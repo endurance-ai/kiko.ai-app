@@ -106,7 +106,7 @@ SELECT
   b.price_min_usd,
   b.price_max_usd,
   b.wiki,
-  b.wiki->>'homepage_url' AS homepage_url,
+  COALESCE(NULLIF(b.wiki->>'homepage_url', ''), NULLIF(b.wiki->>'homepage', '')) AS homepage_url,
   b.wiki->>'status' AS wiki_status,
   b.updated_at AS brand_updated_at,
   pcs.created_at AS status_created_at,
