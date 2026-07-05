@@ -7,6 +7,8 @@ import {
   CONFIG_STATUSES,
   CRAWL_STATUSES,
   PLATFORM_TYPES,
+  SCHEMA_MISSING_MESSAGE,
+  isProductCrawlSchemaMissing,
   type CategoryDiscovery,
   type ConfigStatus,
   type CrawlStatus,
@@ -67,7 +69,7 @@ async function loadBrand(brandNodeId: number): Promise<ProductCrawlBrand | null>
     .select("*")
     .eq("brand_node_id", brandNodeId)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throw error
   return (data as ProductCrawlBrand | null) ?? null
 }
 
@@ -111,15 +113,30 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
     const brand = await loadBrand(id)
     if (!brand) return NextResponse.json({error: "brand_node not found"}, {status: 404})
 
-    const {data: runs} = await supabase
+    const {data: runs, error: runsError} = await supabase
       .from("product_crawl_runs")
       .select("*")
       .eq("brand_node_id", id)
       .order("created_at", {ascending: false})
       .limit(100)
+    if (runsError) {
+      if (isProductCrawlSchemaMissing(runsError)) {
+        return NextResponse.json(
+          {error: SCHEMA_MISSING_MESSAGE, code: "product_crawl_schema_missing"},
+          {status: 503},
+        )
+      }
+      return NextResponse.json({error: runsError.message}, {status: 500})
+    }
 
     return NextResponse.json({brand, runs: runs ?? []})
   } catch (err) {
+    if (isProductCrawlSchemaMissing(err as {code?: string; message?: string; details?: string})) {
+      return NextResponse.json(
+        {error: SCHEMA_MISSING_MESSAGE, code: "product_crawl_schema_missing"},
+        {status: 503},
+      )
+    }
     return NextResponse.json({error: err instanceof Error ? err.message : "internal error"}, {status: 500})
   }
 }
@@ -144,6 +161,12 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
   try {
     before = await loadBrand(id)
   } catch (err) {
+    if (isProductCrawlSchemaMissing(err as {code?: string; message?: string; details?: string})) {
+      return NextResponse.json(
+        {error: SCHEMA_MISSING_MESSAGE, code: "product_crawl_schema_missing"},
+        {status: 503},
+      )
+    }
     console.error("[product-collection] brand fetch failed:", err)
     return NextResponse.json({error: "internal error"}, {status: 500})
   }
@@ -218,6 +241,12 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
   if (error) {
     if (error.code === "23505") {
       return NextResponse.json({error: "platform_key already exists"}, {status: 409})
+    }
+    if (isProductCrawlSchemaMissing(error)) {
+      return NextResponse.json(
+        {error: SCHEMA_MISSING_MESSAGE, code: "product_crawl_schema_missing"},
+        {status: 503},
+      )
     }
     return NextResponse.json({error: error.message}, {status: 400})
   }

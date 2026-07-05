@@ -91,6 +91,8 @@ export type ProductCrawlRun = {
 }
 
 const MAX_LIMIT = 200
+export const SCHEMA_MISSING_MESSAGE =
+  "DB migration 091_brand_node_product_crawl_status.sql is not applied. product_crawl_* objects are missing."
 
 function clamp(n: number, lo: number, hi: number, fallback: number): number {
   if (!Number.isFinite(n)) return fallback
@@ -103,6 +105,18 @@ function isOneOf<T extends readonly string[]>(value: unknown, allowed: T): value
 
 function cleanSearch(value: string): string {
   return value.replace(/[,%]/g, " ").trim().slice(0, 100)
+}
+
+export function isProductCrawlSchemaMissing(error: {code?: string; message?: string; details?: string}): boolean {
+  const text = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    error.code === "PGRST202" ||
+    text.includes("product_crawl_brands") ||
+    text.includes("product_crawl_status") ||
+    text.includes("product_crawl_runs")
+  )
 }
 
 export async function GET(request: NextRequest) {
@@ -137,6 +151,19 @@ export async function GET(request: NextRequest) {
 
   const {data, count, error} = await query
   if (error) {
+    if (isProductCrawlSchemaMissing(error)) {
+      console.error("[product-collection] schema missing:", error)
+      return NextResponse.json({
+        brands: [],
+        runs: [],
+        total: 0,
+        limit,
+        offset,
+        generated_at: new Date().toISOString(),
+        schema_missing: true,
+        error: SCHEMA_MISSING_MESSAGE,
+      })
+    }
     console.error("[product-collection] brand list failed:", error)
     return NextResponse.json({error: "internal error"}, {status: 500})
   }
@@ -152,7 +179,11 @@ export async function GET(request: NextRequest) {
       .order("created_at", {ascending: false})
       .limit(100)
     if (runsError) {
-      console.error("[product-collection] runs failed:", runsError)
+      if (isProductCrawlSchemaMissing(runsError)) {
+        console.error("[product-collection] runs schema missing:", runsError)
+      } else {
+        console.error("[product-collection] runs failed:", runsError)
+      }
     } else {
       runs = (runRows ?? []) as ProductCrawlRun[]
     }
@@ -164,6 +195,7 @@ export async function GET(request: NextRequest) {
     total: count ?? 0,
     limit,
     offset,
+    schema_missing: false,
     generated_at: new Date().toISOString(),
   })
 }

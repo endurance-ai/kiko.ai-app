@@ -69,6 +69,8 @@ type ListResponse = {
   total: number
   limit: number
   offset: number
+  schema_missing?: boolean
+  error?: string
 }
 
 type Draft = Partial<Pick<Brand, "status" | "config_status" | "platform_type" | "platform_key" | "notes" | "blocked_reason">>
@@ -150,9 +152,21 @@ export function ProductCollectionPage() {
     if (urlFilter) params.set("url", urlFilter)
     try {
       const res = await fetch(`/api/admin/product-collection?${params}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = (await res.json()) as ListResponse
-      setList(data)
+      const data = (await res.json().catch(() => ({}))) as Partial<ListResponse> & {error?: string}
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      if (!Array.isArray(data.brands) || !Array.isArray(data.runs)) {
+        throw new Error(data.error ?? "Invalid product collection response")
+      }
+      if (data.schema_missing) setError(data.error ?? "DB migration is not applied")
+      setList({
+        brands: data.brands,
+        runs: data.runs,
+        total: data.total ?? 0,
+        limit: data.limit ?? 100,
+        offset: data.offset ?? 0,
+        schema_missing: data.schema_missing,
+        error: data.error,
+      })
       setDrafts({})
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
