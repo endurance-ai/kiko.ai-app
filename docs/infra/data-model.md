@@ -11,7 +11,7 @@
 | **분석 로그** | ~~`analyses`~~ | ~~001~~→**089 드롭** | **migration 089 DROP (2026-05-22)** — /admin/eval 제거 + writer(/api/analyze) 제거로 dead. |
 | | ~~`analysis_items`~~ | ~~002~~→**089 드롭** | **migration 089 DROP** — eval 상세 전용이었음 |
 | | ~~`analysis_sessions`~~ | ~~021~~→**087 드롭** | **migration 087 DROP (2026-05-22)** — 레거시 refine 세션. /api/analyze + user-voice 제거에 동반 |
-| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)** |
+| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** + **093** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)**. **093: `gender` 필수 CHECK 추가 (`men`/`women`/`unisex`)** |
 | | `product_embeddings` | **071** | FashionSigLIP(768) product image embeddings — `products` 에서 분리. halfvec(768) + HNSW halfvec_cosine_ops. `brand_multimodal_embeddings` (063) 와 대칭. v6 ranking 기반. **product_id bigint PK + FK → products.id ON DELETE CASCADE** |
 | | `product_reviews` | 019 | 상품 리뷰. **070 에서 product_id uuid→bigint swap** |
 | | ~~`product_ai_analysis`~~ | ~~012~~→**069 드랍** | **migration 069 (2026-05-18) 에서 CASCADE DROP. v6 embedding-first 는 PAI 비의존 (REQ-V6-031)** |
@@ -196,6 +196,10 @@ SELECT p.platform,
 | **087** | **admin 전용 전환 — 공개플로우 테이블 DROP (2026-05-22)** — `instagram_post_scrape_images` / `instagram_post_scrapes` / `search_quality_logs` / `user_feedbacks` / `analysis_sessions` DROP. 공개 IG 메인플로우 + analytics/user-voice 어드민 코드 제거에 동반. FK 없음 확인. `analyses`/`analysis_items`는 `/admin/eval` 가 읽어 유지(신규 write 없음). |
 | **088** | **`analyses` 레거시 세션 컬럼 DROP (2026-05-22)** — 087 follow-up. `session_id` / `parent_analysis_id` / `refinement_prompt` / `sequence_number` 제거 (analysis_sessions 제거 후 dangling, 코드 0참조). |
 | **089** | **/admin/eval 제거 — analyses 클러스터 DROP (2026-05-22)** — `api_access_logs` / `analysis_items` / `eval_reviews` / `analyses` DROP. writer(/api/analyze) 제거로 신규 데이터 0 → eval dead-end. eval 페이지/API/컴포넌트 전부 제거 동반. FK 순서: incoming 3개 → analyses. |
+| **090** | **product collection queue** — `product_crawl_status` / `product_crawl_runs` 기반 brand_node별 상품 수집 큐와 상태 이력. |
+| **091** | **brand_node 기준 product crawl status 재정의** — URL-first `product_collection_*` 테이블을 `product_crawl_status` / `product_crawl_runs` 로 대체하고 `product_crawl_brands` view를 생성. |
+| **092** | **crawl status 단순화** — automation이 실제 사용하는 8개 상태로 `product_crawl_status.status` CHECK 축소, `crawl_ready_at` → `crawled_at` rename. |
+| **093** | **`products.gender` 필수화** — `brand_nodes.gender_scope` 로 가능한 기존 상품 backfill 후 `chk_products_gender_required` CHECK (`NOT VALID`) 추가. 신규/수정 상품은 `gender` 배열이 비어 있으면 적재 불가. |
 
 ---
 
