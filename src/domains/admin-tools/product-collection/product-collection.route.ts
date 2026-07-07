@@ -8,14 +8,9 @@ export const dynamic = "force-dynamic"
 export const CRAWL_STATUSES = [
   "not_started",
   "tech_detected",
-  "needs_config",
-  "config_ready",
-  "crawl_ready",
   "crawled",
   "qc_failed",
-  "import_ready",
   "imported",
-  "embed_ready",
   "embedded",
   "active",
   "blocked",
@@ -68,7 +63,7 @@ export type ProductCrawlBrand = {
   blocked_reason: string | null
   notes: string | null
   detected_at: string | null
-  crawl_ready_at: string | null
+  crawled_at: string | null
   imported_at: string | null
   embedded_at: string | null
 }

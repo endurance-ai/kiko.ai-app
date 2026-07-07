@@ -7,14 +7,9 @@ import {cn} from "@/lib/utils"
 type CrawlStatus =
   | "not_started"
   | "tech_detected"
-  | "needs_config"
-  | "config_ready"
-  | "crawl_ready"
   | "crawled"
   | "qc_failed"
-  | "import_ready"
   | "imported"
-  | "embed_ready"
   | "embedded"
   | "active"
   | "blocked"
@@ -78,14 +73,9 @@ type Draft = Partial<Pick<Brand, "status" | "config_status" | "platform_type" | 
 const CRAWL_STATUSES: CrawlStatus[] = [
   "not_started",
   "tech_detected",
-  "needs_config",
-  "config_ready",
-  "crawl_ready",
   "crawled",
   "qc_failed",
-  "import_ready",
   "imported",
-  "embed_ready",
   "embedded",
   "active",
   "blocked",
@@ -97,14 +87,9 @@ const PLATFORM_TYPES: PlatformType[] = ["unknown", "cafe24", "shopify", "custom"
 const STATUS_LABEL: Record<CrawlStatus, string> = {
   not_started: "대기",
   tech_detected: "탐지됨",
-  needs_config: "설정 필요",
-  config_ready: "설정 완료",
-  crawl_ready: "크롤 준비",
   crawled: "크롤 완료",
   qc_failed: "QC 실패",
-  import_ready: "적재 준비",
   imported: "적재 완료",
-  embed_ready: "임베딩 준비",
   embedded: "임베딩 완료",
   active: "활성",
   blocked: "차단",
@@ -119,9 +104,6 @@ const CONFIG_LABEL: Record<ConfigStatus, string> = {
 
 const statusTone: Record<string, string> = {
   tech_detected: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-  config_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  crawl_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  import_ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   qc_failed: "border-red-500/30 bg-red-500/10 text-red-300",
   blocked: "border-red-500/30 bg-red-500/10 text-red-300",
@@ -197,8 +179,8 @@ export function ProductCollectionPage() {
     return {
       notStarted: brands.filter((b) => b.status === "not_started").length,
       missingUrl: brands.filter((b) => !b.homepage_url).length,
-      configReady: brands.filter((b) => b.status === "config_ready" || b.status === "crawl_ready").length,
-      importReady: brands.filter((b) => b.status === "import_ready").length,
+      techDetected: brands.filter((b) => b.status === "tech_detected").length,
+      crawled: brands.filter((b) => b.status === "crawled").length,
     }
   }, [list])
 
@@ -238,8 +220,8 @@ export function ProductCollectionPage() {
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Summary label="미시작" value={summary.notStarted} />
         <Summary label="URL 없음" value={summary.missingUrl} />
-        <Summary label="크롤 준비" value={summary.configReady} />
-        <Summary label="적재 준비" value={summary.importReady} />
+        <Summary label="탐지됨" value={summary.techDetected} />
+        <Summary label="크롤 완료" value={summary.crawled} />
       </div>
 
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">

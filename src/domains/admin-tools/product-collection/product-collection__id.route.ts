@@ -58,7 +58,7 @@ function parseId(raw: string): number | null {
 
 function statusTimestamps(patch: Record<string, unknown>, nowIso: string): void {
   if (patch.status === "tech_detected") patch.detected_at = nowIso
-  if (patch.status === "crawl_ready") patch.crawl_ready_at = nowIso
+  if (patch.status === "crawled") patch.crawled_at = nowIso
   if (patch.status === "imported") patch.imported_at = nowIso
   if (patch.status === "embedded" || patch.status === "active") patch.embedded_at = nowIso
 }
