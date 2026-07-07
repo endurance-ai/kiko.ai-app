@@ -217,7 +217,8 @@ export function ProductCollectionPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <Summary label="전체" value={list?.total ?? 0} />
         <Summary label="미시작" value={summary.notStarted} />
         <Summary label="URL 없음" value={summary.missingUrl} />
         <Summary label="탐지됨" value={summary.techDetected} />
