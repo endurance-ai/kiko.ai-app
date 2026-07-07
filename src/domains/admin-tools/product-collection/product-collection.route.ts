@@ -103,6 +103,33 @@ function cleanSearch(value: string): string {
   return value.replace(/[,%]/g, " ").trim().slice(0, 100)
 }
 
+async function countBrands(filters: {
+  status?: string | null
+  platformType?: string | null
+  urlFilter?: string | null
+  q?: string
+}): Promise<number> {
+  let query = supabase
+    .from("product_crawl_brands")
+    .select("*", {count: "exact", head: true})
+    .gte("brand_updated_at", SINCE_STYLE_NODE_ROLLOUT)
+
+  if (isOneOf(filters.status, CRAWL_STATUSES)) query = query.eq("status", filters.status)
+  if (isOneOf(filters.platformType, PLATFORM_TYPES)) query = query.eq("platform_type", filters.platformType)
+  if (filters.urlFilter === "missing") query = query.is("homepage_url", null)
+  else if (filters.urlFilter === "present") query = query.not("homepage_url", "is", null)
+  if (filters.q) {
+    const like = `%${filters.q}%`
+    query = query.or(
+      `brand_name.ilike.${like},brand_name_normalized.ilike.${like},homepage_url.ilike.${like},platform_key.ilike.${like}`,
+    )
+  }
+
+  const {count, error} = await query
+  if (error) throw error
+  return count ?? 0
+}
+
 export function isProductCrawlSchemaMissing(error: {code?: string; message?: string; details?: string}): boolean {
   const text = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
   return (
@@ -156,6 +183,7 @@ export async function GET(request: NextRequest) {
         total: 0,
         limit,
         offset,
+        stats: {not_started: 0, tech_detected: 0, crawled: 0, missing_url: 0},
         generated_at: new Date().toISOString(),
         schema_missing: true,
         error: SCHEMA_MISSING_MESSAGE,
@@ -186,12 +214,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const [notStarted, techDetected, crawled, missingUrl] = await Promise.all([
+    countBrands({status: "not_started", platformType, urlFilter, q}),
+    countBrands({status: "tech_detected", platformType, urlFilter, q}),
+    countBrands({status: "crawled", platformType, urlFilter, q}),
+    countBrands({status, platformType, urlFilter: "missing", q}),
+  ])
+
   return NextResponse.json({
     brands,
     runs,
     total: count ?? 0,
     limit,
     offset,
+    stats: {not_started: notStarted, tech_detected: techDetected, crawled, missing_url: missingUrl},
     schema_missing: false,
     generated_at: new Date().toISOString(),
   })

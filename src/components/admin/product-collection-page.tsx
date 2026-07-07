@@ -64,6 +64,7 @@ type ListResponse = {
   total: number
   limit: number
   offset: number
+  stats: {not_started: number; tech_detected: number; crawled: number; missing_url: number}
   schema_missing?: boolean
   error?: string
 }
@@ -147,6 +148,7 @@ export function ProductCollectionPage() {
         total: data.total ?? 0,
         limit: data.limit ?? 100,
         offset: data.offset ?? 0,
+        stats: data.stats ?? {not_started: 0, tech_detected: 0, crawled: 0, missing_url: 0},
         schema_missing: data.schema_missing,
         error: data.error,
       })
@@ -174,15 +176,7 @@ export function ProductCollectionPage() {
     return map
   }, [list])
 
-  const summary = useMemo(() => {
-    const brands = list?.brands ?? []
-    return {
-      notStarted: brands.filter((b) => b.status === "not_started").length,
-      missingUrl: brands.filter((b) => !b.homepage_url).length,
-      techDetected: brands.filter((b) => b.status === "tech_detected").length,
-      crawled: brands.filter((b) => b.status === "crawled").length,
-    }
-  }, [list])
+  const summary = list?.stats ?? {not_started: 0, tech_detected: 0, crawled: 0, missing_url: 0}
 
   const updateDraft = (id: number, patch: Draft) => {
     setDrafts((prev) => ({...prev, [id]: {...prev[id], ...patch}}))
@@ -219,9 +213,9 @@ export function ProductCollectionPage() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         <Summary label="전체" value={list?.total ?? 0} />
-        <Summary label="미시작" value={summary.notStarted} />
-        <Summary label="URL 없음" value={summary.missingUrl} />
-        <Summary label="탐지됨" value={summary.techDetected} />
+        <Summary label="미시작" value={summary.not_started} />
+        <Summary label="URL 없음" value={summary.missing_url} />
+        <Summary label="탐지됨" value={summary.tech_detected} />
         <Summary label="크롤 완료" value={summary.crawled} />
       </div>
 
