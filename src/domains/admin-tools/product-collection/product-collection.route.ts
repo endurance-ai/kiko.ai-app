@@ -91,6 +91,7 @@ export type ProductCrawlRun = {
 }
 
 const MAX_LIMIT = 200
+const SINCE_STYLE_NODE_ROLLOUT = "2026-06-01" // 브랜드 크롤 상태는 이 시점 이후 갱신된 brand_node만 대상으로 함
 export const SCHEMA_MISSING_MESSAGE =
   "DB migration 091_brand_node_product_crawl_status.sql is not applied. product_crawl_* objects are missing."
 
@@ -134,6 +135,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("product_crawl_brands")
     .select("*", {count: "exact"})
+    .gte("brand_updated_at", SINCE_STYLE_NODE_ROLLOUT)
     .order("brand_updated_at", {ascending: false, nullsFirst: false})
     .order("brand_name_normalized", {ascending: true, nullsFirst: false})
     .range(offset, offset + limit - 1)

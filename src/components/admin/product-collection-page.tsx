@@ -141,11 +141,12 @@ export function ProductCollectionPage() {
   const [statusFilter, setStatusFilter] = useState("")
   const [platformFilter, setPlatformFilter] = useState("")
   const [urlFilter, setUrlFilter] = useState("")
+  const [offset, setOffset] = useState(0)
 
   const fetchList = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const params = new URLSearchParams({limit: "100"})
+    const params = new URLSearchParams({limit: "100", offset: String(offset)})
     if (q.trim()) params.set("q", q.trim())
     if (statusFilter) params.set("status", statusFilter)
     if (platformFilter) params.set("platform_type", platformFilter)
@@ -173,11 +174,15 @@ export function ProductCollectionPage() {
     } finally {
       setLoading(false)
     }
-  }, [platformFilter, q, statusFilter, urlFilter])
+  }, [offset, platformFilter, q, statusFilter, urlFilter])
 
   useEffect(() => {
     fetchList()
   }, [fetchList])
+
+  useEffect(() => {
+    setOffset(0)
+  }, [q, statusFilter, platformFilter, urlFilter])
 
   const latestRunByBrand = useMemo(() => {
     const map = new Map<number, Run>()
@@ -404,6 +409,30 @@ export function ProductCollectionPage() {
           </tbody>
         </table>
       </div>
+
+      {list && list.total > 0 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div>
+            {Math.min(list.offset + 1, list.total)}-{Math.min(list.offset + list.limit, list.total)} / {list.total}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setOffset((prev) => Math.max(0, prev - list.limit))}
+              disabled={loading || list.offset <= 0}
+              className="inline-flex h-8 items-center rounded border border-border px-3 hover:bg-muted/40 disabled:opacity-50"
+            >
+              이전
+            </button>
+            <button
+              onClick={() => setOffset((prev) => prev + list.limit)}
+              disabled={loading || list.offset + list.limit >= list.total}
+              className="inline-flex h-8 items-center rounded border border-border px-3 hover:bg-muted/40 disabled:opacity-50"
+            >
+              다음
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="rounded-md border border-border">
         <div className="border-b border-border px-3 py-2 text-sm font-medium">최근 실행</div>
