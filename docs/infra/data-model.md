@@ -11,9 +11,12 @@
 | **분석 로그** | ~~`analyses`~~ | ~~001~~→**089 드롭** | **migration 089 DROP (2026-05-22)** — /admin/eval 제거 + writer(/api/analyze) 제거로 dead. |
 | | ~~`analysis_items`~~ | ~~002~~→**089 드롭** | **migration 089 DROP** — eval 상세 전용이었음 |
 | | ~~`analysis_sessions`~~ | ~~021~~→**087 드롭** | **migration 087 DROP (2026-05-22)** — 레거시 refine 세션. /api/analyze + user-voice 제거에 동반 |
-| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)** |
+| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** + **091** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)**. **091: `gender` 필수 CHECK 추가 (`men`/`women`/`unisex`)** |
 | | `product_embeddings` | **071** | FashionSigLIP(768) product image embeddings — `products` 에서 분리. halfvec(768) + HNSW halfvec_cosine_ops. `brand_multimodal_embeddings` (063) 와 대칭. v6 ranking 기반. **product_id bigint PK + FK → products.id ON DELETE CASCADE** |
 | | `product_reviews` | 019 | 상품 리뷰. **070 에서 product_id uuid→bigint swap** |
+| | `product_refresh_sources` | **094** | 브랜드 상태와 분리된 storefront/source 갱신 큐. PK는 실행 가능한 config의 `platform_key` |
+| | `product_refresh_runs` | **094** | source별 목록 갱신 실행 이력, coverage/update/error metrics |
+| | `product_refresh_candidates` | **094** | 갱신 중 발견된 신규 URL 큐. 기존 브랜드와 정확히 매칭된 후보만 별도 LLM worker가 상품으로 적재 |
 | | ~~`product_ai_analysis`~~ | ~~012~~→**069 드랍** | **migration 069 (2026-05-18) 에서 CASCADE DROP. v6 embedding-first 는 PAI 비의존 (REQ-V6-031)** |
 | **브랜드** | `brand_nodes` | 002 + 007 + 037 + 040 + 041 + 042 + **055** + **056** + **067** + **084** | Fashion Genome v2 슬림화. **067 (2026-05-15)**: 037 BGE-m3 텍스트 임베딩 자산(embedding/x_umap/y_umap 등) + 옛 LLM 메타(sensitivity_tags/brand_keywords/aliases/category_type/representative_image_urls/price_band) 13 컬럼 DROP. price_min_usd / price_max_usd (numeric, USD) 신규 + products 기준 backfill. **id bigserial** (056). primary/secondary_node_id FK + node_confidence (055). **084 (2026-05-21)**: `wiki jsonb` 컬럼 추가 (SPEC-BRAND-WIKI-001) — 브랜드 위키 메타 (instagram_handle / homepage_url / description_ko / founder / founded_year / origin_country / status 등). 인덱스 3종 (country / ig_handle / status). |
 | | `brand_attributes` | 010 | 어드민에서 채우는 브랜드 속성 |
@@ -85,6 +88,8 @@ CREATE INDEX idx_products_tags_gin ON products USING gin (tags);
 | ~~`set_hnsw_ef_search(ef int)`~~ | — | **044 드랍** — 호출 0 hits, A/B 실험용 잔재 |
 | ~~`get_product_filter_counts()`~~ | ~~returns table~~ | **migration 074 에서 DROP됨** (feature/redesign-admin). 069 PAI DROP 후 런타임 throw 상태 청산. `count_products_by(p_column text)` (074) 로 대체 — platform/category 두 차원 GROUP BY 집계. |
 | `count_products_by(p_column text)` | returns table(value text, count bigint) | **074** — 어드민 상품 필터 옵션 fast-path. platform / category 컬럼 집계. `app_user` EXECUTE 권한 부여됨 |
+| `product_refresh_source_stats()` | returns table(platform_key text, product_count bigint) | **094** — `products.platform`별 보유 행 수. source 단위 갱신 워크리스트 구성에 사용 |
+| `claim_product_refresh_candidates(p_limit int, p_max_attempts int)` | returns setof product_refresh_candidates | **094** — `FOR UPDATE SKIP LOCKED`로 기존 브랜드 신규상품 후보를 원자적으로 claim하고 stale worker를 복구 |
 | `activate_prompt(p_id bigint)` | returns prompts | **054** — atomic activate: 동일 situation 의 기존 active row deactivate + 대상 row activate 를 단일 트랜잭션으로 처리. race 조건(unique partial index 위반) 방지. SECURITY DEFINER. `app_user` EXECUTE 권한 부여됨 |
 | `classify_brand_acquire(p_brand_id bigint, p_force boolean)` | returns table (id, brand_name, primary_node_id, skip_reason) | **060** — `/api/internal/classify-brand` 진입 가드. SELECT FOR UPDATE + conditional UPDATE sentinel(node_assigned_at). skip_reason NULL=진행 / 'already_classified' / 'recently_assigned'(60초 내). `app_user` EXECUTE 권한 부여됨 |
 | `enqueue_brand_review(p_brand_id bigint, p_reason text, p_vlm_output jsonb)` | returns bigint | **060** — brand_node_review_queue atomic upsert. partial unique index (brand_id WHERE resolved_at IS NULL) 와 함께 open row 1건 보장. `app_user` EXECUTE 권한 부여됨 |
@@ -196,6 +201,9 @@ SELECT p.platform,
 | **087** | **admin 전용 전환 — 공개플로우 테이블 DROP (2026-05-22)** — `instagram_post_scrape_images` / `instagram_post_scrapes` / `search_quality_logs` / `user_feedbacks` / `analysis_sessions` DROP. 공개 IG 메인플로우 + analytics/user-voice 어드민 코드 제거에 동반. FK 없음 확인. `analyses`/`analysis_items`는 `/admin/eval` 가 읽어 유지(신규 write 없음). |
 | **088** | **`analyses` 레거시 세션 컬럼 DROP (2026-05-22)** — 087 follow-up. `session_id` / `parent_analysis_id` / `refinement_prompt` / `sequence_number` 제거 (analysis_sessions 제거 후 dangling, 코드 0참조). |
 | **089** | **/admin/eval 제거 — analyses 클러스터 DROP (2026-05-22)** — `api_access_logs` / `analysis_items` / `eval_reviews` / `analyses` DROP. writer(/api/analyze) 제거로 신규 데이터 0 → eval dead-end. eval 페이지/API/컴포넌트 전부 제거 동반. FK 순서: incoming 3개 → analyses. |
+| **090** | **product collection queue** — `product_crawl_status` / `product_crawl_runs` 기반 brand_node별 상품 수집 큐와 상태 이력. |
+| **091** | **`products.gender` 필수화** — `brand_nodes.gender_scope` 로 가능한 기존 상품 backfill 후 `chk_products_gender_required` CHECK (`NOT VALID`) 추가. 신규/수정 상품은 `gender` 배열이 비어 있으면 적재 불가. |
+| **094** | **source 단위 상품 갱신 큐** — `product_refresh_sources` / `product_refresh_runs` / `product_refresh_candidates`, source별 상품 수 RPC, 신규상품 LLM worker claim RPC. 갱신은 기존 상품의 가격·재고만 직접 수정하며 `brand_nodes`를 생성하지 않음. |
 
 ---
 
