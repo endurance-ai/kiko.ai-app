@@ -126,7 +126,14 @@ interface DebugResponse {
     family_lookup_ms: number
     degraded: boolean | null
   }
-  rpc?: {latency_ms: number; returned: number; limit: number; ok?: boolean}
+  rpc?: {
+    latency_ms: number
+    returned: number
+    limit: number
+    candidate_count?: number
+    brand_cap?: number
+    ok?: boolean
+  }
   results?: ResultRow[]
 }
 
@@ -908,6 +915,12 @@ function RpcPanel({rpc, returned}: {rpc?: DebugResponse["rpc"]; returned: number
       </div>
       <Row label="function" value="search_products_v6" mono />
       <Row label="returned" value={`${returned} / ${rpc?.limit ?? "?"}`} mono />
+      {rpc?.candidate_count != null && (
+        <Row label="candidate pool" value={`${rpc.candidate_count}`} mono />
+      )}
+      {rpc?.brand_cap != null && (
+        <Row label="brand cap" value={`${rpc.brand_cap} / brand`} mono />
+      )}
       <div className="pt-2 border-t border-border/50">
         <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
           RPC = ladder + cosine 검색 단일 호출. degraded = false 는 full-precision (node+family 매칭), true 는 어딘가에서 relaxed.
@@ -936,6 +949,7 @@ function ResultsTable({
           <thead className="sticky top-0 bg-card border-b border-border/60">
             <tr className="text-muted-foreground text-left">
               <th className="px-2 py-1.5 w-8">#</th>
+              <th className="px-2 py-1.5">product ID</th>
               <th className="px-2 py-1.5 w-12"></th>
               <th className="px-2 py-1.5">brand · name</th>
               <th className="px-2 py-1.5">cat / family</th>
@@ -955,21 +969,16 @@ function ResultsTable({
                 )}
               >
                 <td className="px-2 py-1.5 text-muted-foreground">{r.rank}</td>
+                <td className="px-2 py-1.5 font-mono text-muted-foreground">
+                  {r.id}
+                </td>
                 <td className="px-2 py-1.5">
-                  {r.image_url ? (
-                    <div className="relative w-8 h-10 rounded overflow-hidden bg-muted">
-                      <Image
-                        src={r.image_url}
-                        alt=""
-                        fill
-                        sizes="32px"
-                        unoptimized
-                        className="object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-10 rounded bg-muted" />
-                  )}
+                  <ProductImage
+                    src={r.image_url}
+                    alt={r.name}
+                    className="relative w-8 h-10 rounded overflow-hidden bg-muted"
+                    sizes="32px"
+                  />
                 </td>
                 <td className="px-2 py-1.5 max-w-[260px]">
                   <div className="text-foreground truncate">{r.brand}</div>
@@ -1013,11 +1022,12 @@ function DetailPanel({row}: {row: ResultRow | null}) {
   }
   return (
     <section className="border border-border bg-card rounded-md overflow-hidden">
-      <div className="aspect-[3/4] relative bg-muted">
-        {row.image_url && (
-          <Image src={row.image_url} alt={row.name} fill unoptimized className="object-cover" />
-        )}
-      </div>
+      <ProductImage
+        src={row.image_url}
+        alt={row.name}
+        className="aspect-[3/4] relative bg-muted"
+        sizes="(min-width: 1024px) 33vw, 100vw"
+      />
       <div className="p-3 space-y-2">
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -1028,6 +1038,7 @@ function DetailPanel({row}: {row: ResultRow | null}) {
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-border/50">
           <Row label="price" value={row.price ? `₩${row.price.toLocaleString()}` : "—"} mono />
+          <Row label="product ID" value={`${row.id}`} mono />
           <Row label="platform" value={row.platform ?? "—"} mono />
           <Row label="category" value={row.category ?? "—"} mono />
           {row.color && <Row label="color" value={row.color} mono />}
@@ -1064,6 +1075,51 @@ function DetailPanel({row}: {row: ResultRow | null}) {
       </div>
     </section>
   )
+}
+
+function ProductImage({
+  src,
+  alt,
+  className,
+  sizes,
+}: {
+  src: string | null
+  alt: string
+  className: string
+  sizes: string
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const safeSrc = isHttpImageUrl(src) ? src : null
+
+  return (
+    <div className={className}>
+      {safeSrc && failedSrc !== safeSrc ? (
+        <Image
+          src={safeSrc}
+          alt={alt}
+          fill
+          sizes={sizes}
+          unoptimized
+          className="object-contain"
+          onError={() => setFailedSrc(safeSrc)}
+        />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center text-muted-foreground/40">
+          <ImageIcon className="size-4" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function isHttpImageUrl(value: string | null): value is string {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:"
+  } catch {
+    return false
+  }
 }
 
 function Row({

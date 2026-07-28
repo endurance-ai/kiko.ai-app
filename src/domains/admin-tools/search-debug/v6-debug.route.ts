@@ -5,6 +5,11 @@ import {supabase} from "@/lib/supabase"
 import {buildDebugEmbedding, type EmbedMode, type ModalEmbedTrace, toVectorLiteral} from "./embed-modes"
 import {rewriteQuery, type RewriteResponse, visionAnalyze, type VisionResponse} from "./ai-client"
 import {isAllowedImageUrl} from "./url-allow"
+import {
+  diversifySearchResults,
+  isHttpImageUrl,
+  SEARCH_DEBUG_BRAND_CAP,
+} from "./result-diversity"
 
 // 어드민 v6 검색 디버거 백엔드.
 // 입력: image_url 또는 text 또는 둘다 + 선택 필터 (style_node, category, brand)
@@ -59,6 +64,9 @@ export async function POST(request: NextRequest) {
 
   const mode: EmbedMode = body.mode ?? "text"
   const limit = Math.min(Math.max(body.limit ?? 30, 1), 100)
+  // 관련도 상위 풀을 충분히 확보한 다음 브랜드 cap 을 적용한다. 요청 limit 만
+  // 가져오면 한 브랜드가 상위를 독점한 경우 cap 이후 결과가 지나치게 적어진다.
+  const candidateLimit = Math.min(Math.max(limit * 4, limit), 100)
 
   // SSRF 방어: image_url 은 화이트리스트 CDN 만 허용 (ai/ vision + Modal /embed 둘 다 fetch)
   if (body.image_url && !isAllowedImageUrl(body.image_url)) {
@@ -186,7 +194,7 @@ export async function POST(request: NextRequest) {
     p_category: effectiveCategory,
     p_subcategory: body.subcategory ?? null,
     p_brand_names: body.brand_names && body.brand_names.length > 0 ? body.brand_names : null,
-    p_limit: limit,
+    p_limit: candidateLimit,
   })
   const rpcLatency = Date.now() - rpcT0
 
@@ -208,7 +216,11 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const rows = (rpcData ?? []) as V6Row[]
+  const rawRows = (rpcData ?? []) as V6Row[]
+  const rows = diversifySearchResults(
+    rawRows.filter((row) => isHttpImageUrl(row.image_url)),
+    limit
+  )
 
   // ── 5) augment: brand_node + embedded_at + category/family per row ──
   // RPC 는 p.subcategory 만 리턴 (project-wide NULL). 우리가 category/material/
@@ -375,6 +387,8 @@ export async function POST(request: NextRequest) {
       latency_ms: rpcLatency,
       returned: rows.length,
       limit,
+      candidate_count: rawRows.length,
+      brand_cap: SEARCH_DEBUG_BRAND_CAP,
     },
     results: augmentedResults,
   })
