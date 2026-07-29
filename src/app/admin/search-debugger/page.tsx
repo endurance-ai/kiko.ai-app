@@ -11,12 +11,14 @@ import {
     Loader2,
     Play,
     Save,
+    Sparkles,
     Star,
     Trash2,
     Type,
     X
 } from "lucide-react"
 import {cn} from "@/lib/utils"
+import {EditorialCandidatesPanel} from "./editorial-candidates-panel"
 
 type Mode = "image" | "text" | "fused"
 
@@ -177,7 +179,7 @@ export default function SearchDebuggerPage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   // 탭 + 저장
-  const [tab, setTab] = useState<"run" | "history">("run")
+  const [tab, setTab] = useState<"run" | "editorial" | "history">("run")
   const [saving, setSaving] = useState(false)
   const [saveDialog, setSaveDialog] = useState(false)
   const [savedRunId, setSavedRunId] = useState<number | null>(null)
@@ -382,6 +384,15 @@ export default function SearchDebuggerPage() {
               <Play className="size-3" /> Run
             </button>
             <button
+              onClick={() => setTab("editorial")}
+              className={cn(
+                "px-3 py-1.5 transition-colors flex items-center gap-1 border-l border-border",
+                tab === "editorial" ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Sparkles className="size-3" /> 에디토리얼 후보
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={cn(
                 "px-3 py-1.5 transition-colors flex items-center gap-1 border-l border-border",
@@ -396,6 +407,8 @@ export default function SearchDebuggerPage() {
 
       {tab === "history" ? (
         <HistoryTab onRestore={restoreRun} refreshKey={historyRefresh} />
+      ) : tab === "editorial" ? (
+        <EditorialCandidatesPanel />
       ) : (
       <>
 
