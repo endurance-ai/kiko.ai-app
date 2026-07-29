@@ -20,7 +20,7 @@ type Product = {
   platform: string
   category: string | null
   inStock: boolean
-  hasDescription: boolean
+  hasFeatures: boolean
   reviewCount: number
   hasEmbedding: boolean
   styleNode: {code: string; name_en: string} | null
@@ -140,7 +140,7 @@ interface FilterState {
   styleNode: string
   embeddingStatus: string
   stockStatus: string
-  detailStatus: string
+  featureStatus: string
   reviewStatus: string
   sort: string
 }
@@ -152,7 +152,7 @@ const DEFAULTS: FilterState = {
   styleNode: "",
   embeddingStatus: "all",
   stockStatus: "all",
-  detailStatus: "all",
+  featureStatus: "all",
   reviewStatus: "all",
   sort: "newest",
 }
@@ -164,7 +164,7 @@ const CHIP_LABELS: Record<string, string> = {
   styleNode: "노드",
   embeddingStatus: "임베딩",
   stockStatus: "재고",
-  detailStatus: "상세",
+  featureStatus: "VLM",
   reviewStatus: "리뷰",
   sort: "정렬",
 }
@@ -174,8 +174,8 @@ const STATUS_LABELS: Record<string, string> = {
   no_embedding: "없음",
   in_stock: "판매중",
   out_of_stock: "품절",
-  with_desc: "있음",
-  no_desc: "없음",
+  with_features: "있음",
+  no_features: "없음",
   with_reviews: "있음",
   no_reviews: "없음",
   price_desc: "가격↓",
@@ -200,7 +200,7 @@ export default function ProductsPageInner() {
     styleNode: searchParams.get("styleNode") || "",
     embeddingStatus: searchParams.get("embeddingStatus") || "all",
     stockStatus: searchParams.get("stockStatus") || "all",
-    detailStatus: searchParams.get("detailStatus") || "all",
+    featureStatus: searchParams.get("featureStatus") || "all",
     reviewStatus: searchParams.get("reviewStatus") || "all",
     sort: searchParams.get("sort") || "newest",
   }))
@@ -273,7 +273,7 @@ export default function ProductsPageInner() {
         styleNode: filters.styleNode,
         embeddingStatus: filters.embeddingStatus,
         stockStatus: filters.stockStatus,
-        detailStatus: filters.detailStatus,
+        featureStatus: filters.featureStatus,
         reviewStatus: filters.reviewStatus,
         sort: filters.sort,
       })
@@ -323,7 +323,7 @@ export default function ProductsPageInner() {
     pushIfValue("styleNode")
     pushIfValue("embeddingStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     pushIfValue("stockStatus", "all", (v) => STATUS_LABELS[v] ?? v)
-    pushIfValue("detailStatus", "all", (v) => STATUS_LABELS[v] ?? v)
+    pushIfValue("featureStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     pushIfValue("reviewStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     if (filters.sort !== "newest") {
       chips.push({
@@ -445,13 +445,13 @@ export default function ProductsPageInner() {
             <option value="out_of_stock">품절</option>
           </select>
           <select
-            value={filters.detailStatus}
-            onChange={(e) => update({detailStatus: e.target.value})}
+            value={filters.featureStatus}
+            onChange={(e) => update({featureStatus: e.target.value})}
             className={SELECT_CLASS}
           >
-            <option value="all">상세설명</option>
-            <option value="with_desc">있음</option>
-            <option value="no_desc">없음</option>
+            <option value="all">VLM 분석</option>
+            <option value="with_features">있음</option>
+            <option value="no_features">없음</option>
           </select>
           <select
             value={filters.reviewStatus}
