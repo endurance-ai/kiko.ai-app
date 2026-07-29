@@ -4,6 +4,7 @@ import {logger} from "@/lib/logger"
 const AI_API_URL = process.env.AI_API_URL || process.env.AI_SERVER_URL
 const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN
 const TIMEOUT_MS = 120_000
+const EDITORIAL_TIMEOUT_MS = 180_000
 
 export interface RewriteResponse {
   ok: boolean
@@ -61,13 +62,58 @@ export interface ResolveResponse {
   error?: string | null
 }
 
-async function postAi<T>(path: string, body: Record<string, unknown>): Promise<T | {ok: false; error: string}> {
+export interface EditorialQuery {
+  label: string
+  query: string
+  category: string
+}
+
+export interface EditorialCandidate {
+  id: number
+  brand: string
+  name: string
+  price: number
+  image_url: string
+  product_url: string | null
+  platform: string | null
+  subcategory: string | null
+  distance: number
+  degraded: boolean
+  matched_query: string
+  query_label: string
+  concept_score: number
+  image_quality_score: number
+  editorial_score: number
+  review_reason: string
+}
+
+export interface EditorialCandidatesResponse {
+  ok: boolean
+  concept: string
+  gender: "women" | "men" | "unisex"
+  summary: string
+  queries: EditorialQuery[]
+  candidates: EditorialCandidate[]
+  recall_count: number
+  reviewed_count: number
+  rejected_count: number
+  latency_ms: number
+  planner_model: string | null
+  reviewer_model: string | null
+  error?: string | null
+}
+
+async function postAi<T>(
+  path: string,
+  body: Record<string, unknown>,
+  timeoutMs = TIMEOUT_MS
+): Promise<T | {ok: false; error: string}> {
   if (!AI_API_URL) {
     return {ok: false, error: "AI_API_URL not configured"}
   }
   const url = `${AI_API_URL.replace(/\/$/, "")}${path}`
   const ctl = new AbortController()
-  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS)
+  const timer = setTimeout(() => ctl.abort(), timeoutMs)
   const headers: Record<string, string> = {"content-type": "application/json"}
   if (INTERNAL_API_TOKEN) headers["X-Internal-Token"] = INTERNAL_API_TOKEN
   try {
@@ -126,4 +172,16 @@ export function listAiModels(): Promise<ModelsResponse | {ok: false; error: stri
 
 export function resolveUrl(params: {url: string}): Promise<ResolveResponse | {ok: false; error: string}> {
   return postAi<ResolveResponse>("/debug/resolve-url", params)
+}
+
+export function generateEditorialCandidates(params: {
+  concept: string
+  gender: "women" | "men" | "unisex"
+  limit: number
+}): Promise<EditorialCandidatesResponse | {ok: false; error: string}> {
+  return postAi<EditorialCandidatesResponse>(
+    "/debug/editorial-candidates",
+    params,
+    EDITORIAL_TIMEOUT_MS
+  )
 }
