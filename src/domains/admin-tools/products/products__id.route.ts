@@ -25,7 +25,7 @@ export async function GET(
     return NextResponse.json({error: "Product not found"}, {status: 404})
   }
 
-  const [styleRes, embRes] = await Promise.all([
+  const [styleRes, embRes, featRes] = await Promise.all([
     product.brand_node_id != null
       ? supabase
           .from("brand_nodes")
@@ -38,11 +38,21 @@ export async function GET(
       .select("product_id, embedded_at")
       .eq("product_id", id)
       .maybeSingle(),
+    // 2026-07-29: color 는 VLM(product_features.primary_color) 이 단일 출처.
+    supabase
+      .from("product_features")
+      .select("feature_metadata")
+      .eq("product_id", id)
+      .maybeSingle(),
   ])
 
   const styleNode =
     (styleRes.data as {style_nodes: {code: string; name_en: string} | null} | null)
       ?.style_nodes ?? null
+
+  const featureMetadata =
+    (featRes.data as {feature_metadata: Record<string, unknown>} | null)?.feature_metadata ?? null
+  const color = (featureMetadata?.primary_color as string | undefined) ?? null
 
   return NextResponse.json({
     product: {
@@ -60,8 +70,8 @@ export async function GET(
       subcategory: product.subcategory,
       gender: product.gender,
       inStock: product.in_stock,
-      color: product.color,
-      description: product.description,
+      color,
+      featureMetadata,
       tags: product.tags,
       sizeInfo: product.size_info,
       createdAt: product.created_at,
