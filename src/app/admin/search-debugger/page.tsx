@@ -52,7 +52,6 @@ interface ResultRow {
   category?: string | null
   subcategory: string | null
   color?: string | null
-  material?: string | null
   gender?: string[] | null
   distance: number
   degraded: boolean
@@ -1055,7 +1054,6 @@ function DetailPanel({row}: {row: ResultRow | null}) {
           <Row label="platform" value={row.platform ?? "—"} mono />
           <Row label="category" value={row.category ?? "—"} mono />
           {row.color && <Row label="color" value={row.color} mono />}
-          {row.material && <Row label="material" value={row.material} mono />}
           <Row
             label="family"
             value={row.family ?? "—"}

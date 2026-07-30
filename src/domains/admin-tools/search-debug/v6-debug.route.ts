@@ -30,6 +30,10 @@ interface DebugRequest {
   category?: string
   subcategory?: string
   brand_names?: string[]
+  // 2026-07-29: 운영(AI 서버)은 8-arg 로 호출하는데 이 라우트가 5-key 만 넘겨
+  // p_color_family/p_gender 를 누락, 어드민 디버거가 운영 필터를 재현하지 못했다.
+  color_family?: string
+  gender?: string
   limit?: number
   run_rewrite?: boolean
   rewrite_model_id?: string
@@ -194,6 +198,10 @@ export async function POST(request: NextRequest) {
     p_category: effectiveCategory,
     p_subcategory: body.subcategory ?? null,
     p_brand_names: body.brand_names && body.brand_names.length > 0 ? body.brand_names : null,
+    // 8-arg 전체를 넘긴다. 이 두 개를 빼고 5-key 로만 호출하던 동안 디버거가
+    // 운영 필터를 재현하지 못했다 — 색상·성별 필터가 걸린 검색을 디버깅할 수 없었다.
+    p_color_family: body.color_family?.trim().toUpperCase() || null,
+    p_gender: body.gender?.trim().toLowerCase() || null,
     p_limit: candidateLimit,
   })
   const rpcLatency = Date.now() - rpcT0
@@ -223,13 +231,15 @@ export async function POST(request: NextRequest) {
   )
 
   // ── 5) augment: brand_node + embedded_at + category/family per row ──
-  // RPC 는 p.subcategory 만 리턴 (project-wide NULL). 우리가 category/material/
-  // color/gender 별도 fetch 해서 augment row 를 채운다.
+  // RPC 는 p.subcategory 만 리턴 (project-wide NULL). 우리가 category/gender 를
+  // products 에서, color 를 product_features(VLM primary_color) 에서 fetch 해
+  // augment row 를 채운다. products.material 은 migration 079 에서 드롭됐고
+  // products.color 는 product_features 로 이관됐다 (2026-07-29).
   const productIds = rows.map((r) => r.id)
   const brandsRaw = Array.from(new Set(rows.map((r) => r.brand)))
   const brandsLower = Array.from(new Set(rows.map((r) => r.brand.toLowerCase())))
 
-  const [embRes, productMetaRes, brandsByNameRes, brandsByNormalizedRes] = await Promise.all([
+  const [embRes, productMetaRes, featureRes, brandsByNameRes, brandsByNormalizedRes] = await Promise.all([
     productIds.length > 0
       ? supabase
           .from("product_embeddings")
@@ -239,8 +249,14 @@ export async function POST(request: NextRequest) {
     productIds.length > 0
       ? supabase
           .from("products")
-          .select("id, category, color, material, gender, original_price, sale_price")
+          .select("id, category, gender, original_price, sale_price")
           .in("id", productIds)
+      : Promise.resolve({data: []}),
+    productIds.length > 0
+      ? supabase
+          .from("product_features")
+          .select("product_id, feature_metadata")
+          .in("product_id", productIds)
       : Promise.resolve({data: []}),
     // 1차: brand_nodes.brand_name 가 products.brand 와 byte-identical
     brandsRaw.length > 0
@@ -272,8 +288,6 @@ export async function POST(request: NextRequest) {
   type ProductMeta = {
     id: number
     category: string | null
-    color: string | null
-    material: string | null
     gender: string[] | null
     original_price: number | null
     sale_price: number | null
@@ -281,6 +295,16 @@ export async function POST(request: NextRequest) {
   const productMetaMap = new Map<number, ProductMeta>()
   for (const p of (productMetaRes.data ?? []) as ProductMeta[]) {
     productMetaMap.set(p.id, p)
+  }
+
+  // VLM color — 검색 RPC 의 p_color_family 가 보는 것과 동일한 값이어야
+  // 디버거가 필터 결과를 설명할 수 있다.
+  const colorMap = new Map<number, string | null>()
+  for (const f of (featureRes.data ?? []) as Array<{
+    product_id: number
+    feature_metadata: Record<string, unknown> | null
+  }>) {
+    colorMap.set(f.product_id, (f.feature_metadata?.primary_color as string | undefined) ?? null)
   }
 
   // category(raw) → family lookup (verbatim 매칭 — migration 082 fix)
@@ -345,8 +369,7 @@ export async function POST(request: NextRequest) {
       // category 는 우리가 fetch 한 raw, subcategory 는 RPC 리턴 (대부분 null)
       category: meta?.category ?? null,
       subcategory: r.subcategory,
-      color: meta?.color ?? null,
-      material: meta?.material ?? null,
+      color: colorMap.get(r.id) ?? null,
       gender: meta?.gender ?? null,
       original_price: meta?.original_price ?? null,
       sale_price: meta?.sale_price ?? null,

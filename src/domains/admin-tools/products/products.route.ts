@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
   const styleNodeCode = searchParams.get("styleNode") || ""
   const embeddingStatus = searchParams.get("embeddingStatus") || "all" // all | embedded | no_embedding
   const stockStatus = searchParams.get("stockStatus") || "all"
-  const detailStatus = searchParams.get("detailStatus") || "all"
+  // 2026-07-29: products.description 제거 → "상세 유무" 필터가 의미를 잃었다.
+  // VLM 분석(product_features) 보유 여부로 재정의 (all | with_features | no_features).
+  const featureStatus = searchParams.get("featureStatus") || "all"
   const reviewStatus = searchParams.get("reviewStatus") || "all"
   const sort = searchParams.get("sort") || "newest"
 
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("products")
     .select(
-      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, description, review_count",
+      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count",
       {count: "exact"}
     )
 
@@ -71,16 +73,16 @@ export async function GET(request: NextRequest) {
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
-  if (detailStatus === "with_desc") query = query.not("description", "is", null)
-  else if (detailStatus === "no_desc") query = query.is("description", null)
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
   else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 
   query = query.order(orderCol, {ascending: orderAsc, nullsFirst: false})
 
-  // embeddingStatus 필터는 결과 page 에서 post-filter (product_embeddings JOIN 어렵)
+  // embeddingStatus / featureStatus 필터는 결과 page 에서 post-filter
+  // (product_embeddings / product_features 를 PostgREST select 로 JOIN 하기 어렵다)
   const needsEmbeddingFilter = embeddingStatus !== "all"
-  if (needsEmbeddingFilter) {
+  const needsFeatureFilter = featureStatus !== "all"
+  if (needsEmbeddingFilter || needsFeatureFilter) {
     query = query.range(0, 1999)
   } else {
     const from = page * PAGE_SIZE
@@ -95,24 +97,38 @@ export async function GET(request: NextRequest) {
     price: number | null; source_currency: string | null; source_price: number | null;
     image_url: string | null; platform: string; category: string | null;
     in_stock: boolean; gender: string[] | null; created_at: string;
-    description: string | null; review_count: number | null;
+    review_count: number | null;
   }
 
   let rows = (data ?? []) as ProductRow[]
   let totalCount = count ?? 0
 
-  // embeddingStatus post-filter
+  // embeddingStatus / featureStatus post-filter — 두 필터가 동시에 걸릴 수 있으므로
+  // 둘 다 적용한 뒤에 한 번만 페이지네이션한다 (중복 slice 방지).
   let embeddedSet: Set<number> | null = null
-  if (needsEmbeddingFilter && rows.length > 0) {
+  let featureSet: Set<number> | null = null
+  if ((needsEmbeddingFilter || needsFeatureFilter) && rows.length > 0) {
     const ids = rows.map((r) => r.id)
-    const {data: embRows} = await supabase
-      .from("product_embeddings")
-      .select("product_id")
-      .in("product_id", ids)
-    embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
-    rows = rows.filter((r) =>
-      embeddingStatus === "embedded" ? embeddedSet!.has(r.id) : !embeddedSet!.has(r.id)
-    )
+    if (needsEmbeddingFilter) {
+      const {data: embRows} = await supabase
+        .from("product_embeddings")
+        .select("product_id")
+        .in("product_id", ids)
+      embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
+      rows = rows.filter((r) =>
+        embeddingStatus === "embedded" ? embeddedSet!.has(r.id) : !embeddedSet!.has(r.id)
+      )
+    }
+    if (needsFeatureFilter) {
+      const {data: featRows} = await supabase
+        .from("product_features")
+        .select("product_id")
+        .in("product_id", rows.map((r) => r.id))
+      featureSet = new Set((featRows ?? []).map((r) => r.product_id as number))
+      rows = rows.filter((r) =>
+        featureStatus === "with_features" ? featureSet!.has(r.id) : !featureSet!.has(r.id)
+      )
+    }
     totalCount = rows.length
     rows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   }
@@ -137,14 +153,23 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 페이지 상품의 embedding 보유 여부 (이미 fetch한 경우 재사용)
-  if (!embeddedSet && rows.length > 0) {
+  // 페이지 상품의 embedding / VLM feature 보유 여부 (이미 fetch한 경우 재사용)
+  if (rows.length > 0) {
     const ids = rows.map((r) => r.id)
-    const {data: embRows} = await supabase
-      .from("product_embeddings")
-      .select("product_id")
-      .in("product_id", ids)
-    embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
+    if (!embeddedSet) {
+      const {data: embRows} = await supabase
+        .from("product_embeddings")
+        .select("product_id")
+        .in("product_id", ids)
+      embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
+    }
+    if (!featureSet) {
+      const {data: featRows} = await supabase
+        .from("product_features")
+        .select("product_id")
+        .in("product_id", ids)
+      featureSet = new Set((featRows ?? []).map((r) => r.product_id as number))
+    }
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -162,7 +187,7 @@ export async function GET(request: NextRequest) {
       platform: p.platform,
       category: p.category,
       inStock: p.in_stock,
-      hasDescription: !!p.description,
+      hasFeatures: featureSet ? featureSet.has(p.id) : false,
       reviewCount: p.review_count ?? 0,
       hasEmbedding: embeddedSet ? embeddedSet.has(p.id) : false,
       styleNode: style ? {code: style.code, name_en: style.name_en} : null,

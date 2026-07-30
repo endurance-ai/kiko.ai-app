@@ -11,7 +11,8 @@
 | **분석 로그** | ~~`analyses`~~ | ~~001~~→**089 드롭** | **migration 089 DROP (2026-05-22)** — /admin/eval 제거 + writer(/api/analyze) 제거로 dead. |
 | | ~~`analysis_items`~~ | ~~002~~→**089 드롭** | **migration 089 DROP** — eval 상세 전용이었음 |
 | | ~~`analysis_sessions`~~ | ~~021~~→**087 드롭** | **migration 087 DROP (2026-05-22)** — 레거시 refine 세션. /api/analyze + user-voice 제거에 동반 |
-| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** + **091** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)**. **091: `gender` 필수 CHECK 추가 (`men`/`women`/`unisex`)** |
+| **상품** | `products` | 004 + 005 + 006 + 011 + 027 + **070** + ~~091~~ + **096** | 크롤로 들어온 모든 SKU. 임베딩 컬럼 추가됨 (027). **070: id uuid→bigserial 전환 (2026-05-18)**. ~~091: `gender` 필수 CHECK~~ → **096 에서 해제 (2026-07-29)** — gender·color 의 단일 출처가 `product_features` 로 이관됨. `products.gender`/`color`/`description` 은 DEPRECATED (읽기 경로 없음, 컬럼 DROP 은 VLM gender 커버리지 확보 후) |
+| | `product_features` | **095** (실물은 2026-07-28 선행 생성) | **VLM 이 만드는 이미지 파생 피처 — color·gender 의 단일 출처.** PK `product_id` → products.id ON DELETE CASCADE. `feature_metadata jsonb` (100% 보유 키: `primary_color`(16 canonical family UPPERCASE) / `secondary_colors` / `material` / `pattern` / `style_tags` / `neckline` / `details` / `fit`, + `gender` 스칼라), `retrieval_text`, `text_embedding halfvec(768)` + HNSW. 진행률은 097 의 `product_features_coverage` 로 본다 |
 | | `product_embeddings` | **071** | FashionSigLIP(768) product image embeddings — `products` 에서 분리. halfvec(768) + HNSW halfvec_cosine_ops. `brand_multimodal_embeddings` (063) 와 대칭. v6 ranking 기반. **product_id bigint PK + FK → products.id ON DELETE CASCADE** |
 | | `product_reviews` | 019 | 상품 리뷰. **070 에서 product_id uuid→bigint swap** |
 | | `product_refresh_sources` | **094** | 브랜드 상태와 분리된 storefront/source 갱신 큐. PK는 실행 가능한 config의 `platform_key` |
@@ -204,6 +205,9 @@ SELECT p.platform,
 | **090** | **product collection queue** — `product_crawl_status` / `product_crawl_runs` 기반 brand_node별 상품 수집 큐와 상태 이력. |
 | **091** | **`products.gender` 필수화** — `brand_nodes.gender_scope` 로 가능한 기존 상품 backfill 후 `chk_products_gender_required` CHECK (`NOT VALID`) 추가. 신규/수정 상품은 `gender` 배열이 비어 있으면 적재 불가. |
 | **094** | **source 단위 상품 갱신 큐** — `product_refresh_sources` / `product_refresh_runs` / `product_refresh_candidates`, source별 상품 수 RPC, 신규상품 LLM worker claim RPC. 갱신은 기존 상품의 가격·재고만 직접 수정하며 `brand_nodes`를 생성하지 않음. |
+| **095** | **`product_features` 읽기 경로 (2026-07-29)** — 실물만 있고 코드에 없던 VLM 피처 테이블을 `CREATE TABLE IF NOT EXISTS` 로 기록. `idx_pf_primary_color` / `idx_pf_gender` **표현식 btree** 추가 — 기존 `jsonb_path_ops` GIN 은 `->>` 등치 비교를 못 탄다. `chk_pf_gender_vocab` CHECK(`NOT VALID`)로 `men\|women\|unisex` 어휘 고정. |
+| **096** | **`products.gender` 필수 CHECK 해제 (2026-07-29)** — **091 을 되돌린다.** gender 의 단일 출처가 VLM `product_features` 로 이관돼 크롤러가 gender 를 만들지 않으므로, `chk_products_gender_required` 가 있으면 신규 상품 INSERT 자체가 실패한다. 컬럼에 DEPRECATED 코멘트. `search_products_v6`/curation/PDP 는 VLM → `products.gender` → fail-open 3단 다리로 읽는다. |
+| **097** | **`product_features` 커버리지 뷰 (2026-07-30)** — `product_features_coverage`(플랫폼별 진행률 + `with_gender`) + `product_features_pending`(VLM 배치가 소비할 대기열). 131,058행이 단일 벌크로 생성됐고 증분 경로가 없어, features 없는 상품이 색상 필터에서 완화 없이 탈락하는 것을 가시화·해소하기 위한 것. 추가 전용(뷰 2개). |
 
 ---
 
