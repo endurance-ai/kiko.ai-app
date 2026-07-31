@@ -207,6 +207,7 @@ SELECT p.platform,
 | **094** | **source 단위 상품 갱신 큐** — `product_refresh_sources` / `product_refresh_runs` / `product_refresh_candidates`, source별 상품 수 RPC, 신규상품 LLM worker claim RPC. 갱신은 기존 상품의 가격·재고만 직접 수정하며 `brand_nodes`를 생성하지 않음. |
 | **095** | **`product_features` 읽기 경로 (2026-07-29)** — 실물만 있고 코드에 없던 VLM 피처 테이블을 `CREATE TABLE IF NOT EXISTS` 로 기록. `idx_pf_primary_color` / `idx_pf_gender` **표현식 btree** 추가 — 기존 `jsonb_path_ops` GIN 은 `->>` 등치 비교를 못 탄다. `chk_pf_gender_vocab` CHECK(`NOT VALID`)로 `men\|women\|unisex` 어휘 고정. |
 | **096** | **`products.gender` 필수 CHECK 해제 (2026-07-29)** — **091 을 되돌린다.** gender 의 단일 출처가 VLM `product_features` 로 이관돼 크롤러가 gender 를 만들지 않으므로, `chk_products_gender_required` 가 있으면 신규 상품 INSERT 자체가 실패한다. 컬럼에 DEPRECATED 코멘트. `search_products_v6`/curation/PDP 는 VLM → `products.gender` → fail-open 3단 다리로 읽는다. |
+| **098** | **`products.product_url` 중복 UNIQUE 제약 정리 (2026-07-31)** — 같은 컬럼에 `products_product_url_key` 와 `uq_products_product_url` 이 동시에 걸려 인덱스가 이중(각 29 MB)으로 유지되고 있었다. 저장공간 29 MB + `product_url` 쓰기마다 인덱스 2개 갱신. 008 이 명시적으로 만든 `uq_products_product_url` 을 남기고, 어느 마이그에도 정의가 없는(070 테이블 재구축 잔재로 추정) 자동 명명 제약을 DROP. FK 4개는 모두 `products.id` 를 보므로 무영향, PostgREST upsert(onConflict=product_url)도 컬럼 기준이라 그대로 동작. |
 | **097** | **`product_features` 커버리지 뷰 (2026-07-30)** — `product_features_coverage`(플랫폼별 진행률 + `with_gender`) + `product_features_pending`(VLM 배치가 소비할 대기열). 131,058행이 단일 벌크로 생성됐고 증분 경로가 없어, features 없는 상품이 색상 필터에서 완화 없이 탈락하는 것을 가시화·해소하기 위한 것. 추가 전용(뷰 2개). |
 
 ---
