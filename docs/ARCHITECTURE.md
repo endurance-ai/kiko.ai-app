@@ -323,3 +323,11 @@ stack-internal 아키텍처 재설계. **언어·동작·화면 불변**, 레이
 | 2026-04-26 | `/dna`, `/about`, `/archive` 라우트 + 관련 DB 제거 (PR #30) |
 | 2026-04-24 | v5 인프라 마이그레이션 027 적용 (pgvector + pgroonga + bulk RPC) |
 | 2026-04-23 | 해외 Shopify 자사몰 10개 크롤 — 35,746 SKU 추가 |
+
+## Notification read contract
+
+`database/migrations/101_notification_candidate_indexes.sql` adds the partial
+`products(brand_node_id, created_at DESC, id DESC)` read index used by the
+ai-server followed-brand notification detector. Notification state and delivery
+outbox tables remain owned by the ai-server Alembic `ai.*` schema; this app owns
+only the shared public-product index.
