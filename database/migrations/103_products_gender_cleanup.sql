@@ -16,12 +16,27 @@
 --
 -- (a)+(b) 이후 products.gender 의 상태는 정확히 둘뿐이다:
 --   · men/women/unisex 로만 이뤄진 비어있지 않은 배열
---   · NULL  ← 크롤러 재크롤 또는 src/repair-product-gender.ts 가 채운다
+--   · NULL
+--
+-- ⚠️ 2026-08-03 실측 정정: 이 파일을 쓸 때는 (a) 가 "혼합 배열에서 쓰레기
+--    토큰만 걷어내면 canonical 이 남는다" 는 전제였는데, **822행 전부가
+--    non-canonical 단독**이었다 — `{kids}` 351 / `{unknown}` 301 / `{baby}` 170.
+--    따라서 (a) 는 이 행들을 정리하는 게 아니라 **전부 NULL 로 만든다.**
+--
+--    그 NULL 은 백필로 해소되지 않는다. classifyGenderRepair 로 재판정한 결과
+--    회수 가능한 것은 4행뿐이고 나머지 818행은 Uniqlo 아동복(kids 가드가 성인
+--    성별 부여를 의도적으로 막는다)과 Stüssy 모자류(성별 신호 자체가 없음)다.
+--    → crawler/sql/runbooks/2026-08-03-delete-gender-noncanonical.sql 로 삭제한다.
 --
 -- 멱등하다. 여러 번 돌려도 결과가 같다.
 --
--- 순서: 이 파일 → (재크롤 + repair 스크립트로 NULL 해소) → 104.
---       104 는 NULL 이 0 이 되기 전에는 VALIDATE 에 실패한다.
+-- 순서:
+--   이 파일
+--     → pnpm repair:product-gender  (재판정 회수 4행)
+--     → 삭제 런북 2/2               (818행)
+--     → **크롤러 코드 배포**
+--     → 104
+--   104 는 NULL 이 0 이 되기 전에는 VALIDATE 에 실패한다.
 
 BEGIN;
 
