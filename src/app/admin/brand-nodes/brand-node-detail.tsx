@@ -33,8 +33,6 @@ type WikiData = {
   instagram_handle?: string | null
   instagram_url?: string | null
   homepage_url?: string | null
-  description_ko?: string | null
-  description_original?: string | null
   founder?: string[] | null
   founded_year?: number | null
   origin_country?: string | null
@@ -50,6 +48,7 @@ type Detail = {
   brand: {
     id: number
     name: string
+    description: string | null
     attributes: BrandAttributes | null
     wiki: WikiData | null
     primary_style_node: NodeRef | null
@@ -191,9 +190,10 @@ export function BrandNodeDetailDrawer({
             {/* 1.5 Wiki — 브랜드 위키 메타 (SPEC-BRAND-WIKI-001 M2) */}
             <WikiSection
               brandId={detail.brand.id}
+              description={detail.brand.description}
               wiki={detail.brand.wiki}
-              onUpdated={(next) =>
-                setDetail((d) => (d ? {...d, brand: {...d.brand, wiki: next}} : d))
+              onUpdated={(description, wiki) =>
+                setDetail((d) => (d ? {...d, brand: {...d.brand, description, wiki}} : d))
               }
             />
 
@@ -456,15 +456,16 @@ const STATUS_STYLE: Record<NonNullable<WikiData["status"]>, string> = {
 
 function WikiSection({
   brandId,
+  description,
   wiki,
   onUpdated,
 }: {
   brandId: number
+  description: string | null
   wiki: WikiData | null
-  onUpdated: (next: WikiData) => void
+  onUpdated: (description: string | null, wiki: WikiData) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [showOriginal, setShowOriginal] = useState(false)
   const [showSources, setShowSources] = useState(false)
 
   if (!wiki) {
@@ -477,7 +478,7 @@ function WikiSection({
           </Button>
         </div>
         {editing ? (
-          <WikiEditor brandId={brandId} initial={{}} onCancel={() => setEditing(false)} onSaved={(w) => { setEditing(false); onUpdated(w) }} />
+          <WikiEditor brandId={brandId} initialDescription={description} initial={{}} onCancel={() => setEditing(false)} onSaved={(d, w) => { setEditing(false); onUpdated(d, w) }} />
         ) : (
           <p className="text-xs text-muted-foreground">위키 정보 없음</p>
         )}
@@ -489,7 +490,7 @@ function WikiSection({
     return (
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Wiki 편집</h3>
-        <WikiEditor brandId={brandId} initial={wiki} onCancel={() => setEditing(false)} onSaved={(w) => { setEditing(false); onUpdated(w) }} />
+        <WikiEditor brandId={brandId} initialDescription={description} initial={wiki} onCancel={() => setEditing(false)} onSaved={(d, w) => { setEditing(false); onUpdated(d, w) }} />
       </section>
     )
   }
@@ -550,24 +551,8 @@ function WikiSection({
       )}
 
       {/* description */}
-      {wiki.description_ko && (
-        <p className="text-xs leading-relaxed">{wiki.description_ko}</p>
-      )}
-      {wiki.description_original && (
-        <div className="text-[11px]">
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground hover:underline"
-            onClick={() => setShowOriginal((v) => !v)}
-          >
-            {showOriginal ? "원문 접기" : "원문 보기"}
-          </button>
-          {showOriginal && (
-            <p className="mt-1 whitespace-pre-wrap leading-relaxed text-muted-foreground">
-              {wiki.description_original}
-            </p>
-          )}
-        </div>
+      {description && (
+        <p className="whitespace-pre-wrap text-xs leading-relaxed">{description}</p>
       )}
 
       {/* 메타 (founder + enriched_at) */}
@@ -623,21 +608,22 @@ function WikiSection({
 
 function WikiEditor({
   brandId,
+  initialDescription,
   initial,
   onCancel,
   onSaved,
 }: {
   brandId: number
+  initialDescription: string | null
   initial: WikiData
   onCancel: () => void
-  onSaved: (w: WikiData) => void
+  onSaved: (description: string | null, wiki: WikiData) => void
 }) {
   const [form, setForm] = useState({
     instagram_handle: initial.instagram_handle ?? "",
     instagram_url: initial.instagram_url ?? "",
     homepage_url: initial.homepage_url ?? "",
-    description_ko: initial.description_ko ?? "",
-    description_original: initial.description_original ?? "",
+    description: initialDescription ?? "",
     founded_year: initial.founded_year != null ? String(initial.founded_year) : "",
     origin_country: initial.origin_country ?? "",
     status: (initial.status ?? "ok") as "ok" | "review" | "no_data",
@@ -657,8 +643,7 @@ function WikiEditor({
       instagram_handle: form.instagram_handle.trim() || null,
       instagram_url: form.instagram_url.trim() || null,
       homepage_url: form.homepage_url.trim() || null,
-      description_ko: form.description_ko.trim() || null,
-      description_original: form.description_original.trim() || null,
+      description: form.description.trim() || null,
       origin_country: form.origin_country.trim().toUpperCase() || null,
       founder: founders.length > 0 ? founders : null,
       status: form.status,
@@ -682,7 +667,7 @@ function WikiEditor({
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? "save failed")
-      onSaved(d.wiki as WikiData)
+      onSaved((d.description as string | null) ?? null, d.wiki as WikiData)
     } catch (e) {
       setErr(e instanceof Error ? e.message : "save failed")
     } finally {
@@ -701,11 +686,8 @@ function WikiEditor({
       <Field label="홈페이지">
         <Input value={form.homepage_url} onChange={(e) => setField("homepage_url", e.target.value)} placeholder="https://..." />
       </Field>
-      <Field label="설명 (KO)">
-        <Textarea rows={3} value={form.description_ko} onChange={(e) => setField("description_ko", e.target.value)} />
-      </Field>
-      <Field label="원문 설명">
-        <Textarea rows={3} value={form.description_original} onChange={(e) => setField("description_original", e.target.value)} />
+      <Field label="설명">
+        <Textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="국가 (ISO-2)">

@@ -13,8 +13,6 @@ type WikiPatch = {
   instagram_handle?: string | null
   instagram_url?: string | null
   homepage_url?: string | null
-  description_ko?: string | null
-  description_original?: string | null
   founder?: string[] | null
   founded_year?: number | null
   origin_country?: string | null
@@ -24,15 +22,16 @@ type WikiPatch = {
   status?: "ok" | "review" | "no_data" | null
 }
 
+type BrandInfoPatch = WikiPatch & {description?: string | null}
+
 const CURRENT_YEAR = new Date().getFullYear()
 const COUNTRY_RE = /^[A-Z]{2}$/
 const URL_RE = /^https?:\/\//
-const ALLOWED_KEYS = new Set<keyof WikiPatch>([
+const ALLOWED_KEYS = new Set<keyof BrandInfoPatch>([
   "instagram_handle",
   "instagram_url",
   "homepage_url",
-  "description_ko",
-  "description_original",
+  "description",
   "founder",
   "founded_year",
   "origin_country",
@@ -43,13 +42,13 @@ const ALLOWED_KEYS = new Set<keyof WikiPatch>([
 ])
 const ALLOWED_STATUS = new Set(["ok", "review", "no_data"])
 
-function validate(body: unknown): {ok: true; patch: WikiPatch} | {ok: false; error: string} {
+function validate(body: unknown): {ok: true; patch: BrandInfoPatch} | {ok: false; error: string} {
   if (!body || typeof body !== "object") return {ok: false, error: "body required"}
   const b = body as Record<string, unknown>
-  const patch: WikiPatch = {}
+  const patch: BrandInfoPatch = {}
 
   for (const k of Object.keys(b)) {
-    if (!ALLOWED_KEYS.has(k as keyof WikiPatch)) return {ok: false, error: `unknown field: ${k}`}
+    if (!ALLOWED_KEYS.has(k as keyof BrandInfoPatch)) return {ok: false, error: `unknown field: ${k}`}
   }
 
   if ("origin_country" in b) {
@@ -80,7 +79,7 @@ function validate(body: unknown): {ok: true; patch: WikiPatch} | {ok: false; err
     }
   }
 
-  for (const k of ["instagram_handle", "description_ko", "description_original"] as const) {
+  for (const k of ["instagram_handle", "description"] as const) {
     if (k in b) {
       const v = b[k]
       if (v !== null && typeof v !== "string") return {ok: false, error: `${k} must be string`}
@@ -151,7 +150,7 @@ function validate(body: unknown): {ok: true; patch: WikiPatch} | {ok: false; err
 }
 
 /**
- * PATCH /api/admin/brand-nodes/[id]/wiki — merge wiki jsonb. Admin verified.
+ * PATCH /api/admin/brand-nodes/[id]/wiki — update description and merge wiki jsonb. Admin verified.
  * SPEC-BRAND-WIKI-001 M2.
  */
 export async function PATCH(request: NextRequest, ctx: Ctx) {
@@ -170,7 +169,7 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
 
   const {data: existing, error: fetchErr} = await supabase
     .from("brand_nodes")
-    .select("wiki")
+    .select("wiki, description")
     .eq("id", numericId)
     .maybeSingle()
   if (fetchErr) return NextResponse.json({error: fetchErr.message}, {status: 500})
@@ -178,13 +177,17 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
 
   const prevWiki = (existing.wiki as Record<string, unknown> | null) ?? {}
   const prevConfidence = (prevWiki.confidence as Record<string, number> | undefined) ?? {}
+  const cleanedWiki = {...prevWiki}
+  delete cleanedWiki.description_ko
+  delete cleanedWiki.description_original
+  const {description: nextDescription, ...wikiPatch} = v.patch
 
   const merged: Record<string, unknown> = {
-    ...prevWiki,
-    ...v.patch,
+    ...cleanedWiki,
+    ...wikiPatch,
     confidence: {
       ...prevConfidence,
-      ...(v.patch.confidence ?? {}),
+      ...(wikiPatch.confidence ?? {}),
       overall: 1.0, // admin-verified
     },
     enriched_at: new Date().toISOString(),
@@ -192,13 +195,22 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
   }
 
   // .select().single() 으로 0-row update 를 silent no-op 으로 두지 않음 (TOCTOU 방어).
+  const update: {wiki: Record<string, unknown>; description?: string | null} = {wiki: merged}
+  if (Object.prototype.hasOwnProperty.call(v.patch, "description")) {
+    update.description = nextDescription ?? null
+  }
+
   const {data: updated, error: updErr} = await supabase
     .from("brand_nodes")
-    .update({wiki: merged})
+    .update(update)
     .eq("id", numericId)
-    .select("wiki")
+    .select("wiki, description")
     .single()
   if (updErr) return NextResponse.json({error: "update failed"}, {status: 500})
 
-  return NextResponse.json({ok: true, wiki: updated.wiki ?? merged})
+  return NextResponse.json({
+    ok: true,
+    description: updated.description ?? null,
+    wiki: updated.wiki ?? merged,
+  })
 }
