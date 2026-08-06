@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   type BrandRow = {
     id: number
     brand_name: string
+    description: string | null
     attributes: Record<string, string[]> | null
     wiki: Record<string, unknown> | null
     primary_style_node_id: number | null
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
   const {data: brandRaw, error: bErr} = await supabase
     .from("brand_nodes")
     .select(
-      "id, brand_name, attributes, wiki, " +
+      "id, brand_name, description, attributes, wiki, " +
         "primary_style_node_id, secondary_style_node_id, " +
         "style_node_confidence, style_node_assigned_model, style_node_assigned_at, " +
         "gender_scope, source_platforms, price_min_usd, price_max_usd",
@@ -139,6 +140,7 @@ export async function GET(request: NextRequest) {
     brand: {
       id: brand.id,
       name: brand.brand_name,
+      description: brand.description,
       attributes: brand.attributes,
       wiki: brand.wiki,
       primary_style_node:
