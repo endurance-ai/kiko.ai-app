@@ -90,7 +90,7 @@ function ProductCard({p}: {p: Product}) {
   }
 
   return (
-    <Link href={`/admin/products/${p.id}`} className="group block" target="_blank" rel="noopener">
+    <Link href={`/admin/products/${p.id}`} className="group block">
       <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
         {/* Image */}
         <div className="aspect-[3/4] relative bg-muted">
@@ -285,7 +285,13 @@ export default function ProductsPageInner() {
   }, [])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchMountRef = useRef(false)
   useEffect(() => {
+    // 초기 마운트(뒤로가기 복원 포함)엔 page 리셋 안 함 — URL 의 page 유지.
+    if (!searchMountRef.current) {
+      searchMountRef.current = true
+      return
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       setDebouncedSearch(filters.search)
