@@ -4,7 +4,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useRouter, useSearchParams} from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
-import {ChevronLeft, ChevronRight, Loader2, RotateCcw, Search, X} from "lucide-react"
+import {Check, ChevronLeft, ChevronRight, Copy, Loader2, RotateCcw, Search, X} from "lucide-react"
 import {Button} from "@/components/ui/button"
 import type {FilterOptionsResponse} from "@/app/api/admin/products/filter-options/route"
 import {formatProductPrice} from "@/lib/format-product-price"
@@ -12,6 +12,7 @@ import {formatProductPrice} from "@/lib/format-product-price"
 type Product = {
   id: string
   brand: string
+  brandNodeId: number | null
   name: string
   price: number | null
   sourceCurrency: string | null
@@ -68,10 +69,28 @@ function OptionList({
 
 function ProductCard({p}: {p: Product}) {
   const [imgError, setImgError] = useState(false)
+  const [copiedPid, setCopiedPid] = useState(false)
+  const [copiedBid, setCopiedBid] = useState(false)
   const tags = [p.category, p.styleNode?.code].filter(Boolean)
 
+  const handleCopyPid = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(String(p.id))
+    setCopiedPid(true)
+    setTimeout(() => setCopiedPid(false), 1000)
+  }
+
+  const handleCopyBid = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(String(p.brandNodeId))
+    setCopiedBid(true)
+    setTimeout(() => setCopiedBid(false), 1000)
+  }
+
   return (
-    <Link href={`/admin/products/${p.id}`} className="group block">
+    <Link href={`/admin/products/${p.id}`} className="group block" target="_blank" rel="noopener">
       <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
         {/* Image */}
         <div className="aspect-[3/4] relative bg-muted">
@@ -127,6 +146,31 @@ function ProductCard({p}: {p: Product}) {
               ))}
             </div>
           )}
+          {/* ID row with copy buttons */}
+          <div className="flex items-center gap-2 pt-1 text-[10px] tabular-nums text-muted-foreground">
+            <div className="flex items-center gap-0.5">
+              <span>PID {p.id}</span>
+              <button
+                type="button"
+                onClick={handleCopyPid}
+                className="inline-flex items-center justify-center p-0.5 hover:text-foreground transition-colors"
+              >
+                {copiedPid ? <Check size={10} /> : <Copy size={10} />}
+              </button>
+            </div>
+            {p.brandNodeId != null && (
+              <div className="flex items-center gap-0.5">
+                <span>BID {p.brandNodeId}</span>
+                <button
+                  type="button"
+                  onClick={handleCopyBid}
+                  className="inline-flex items-center justify-center p-0.5 hover:text-foreground transition-colors"
+                >
+                  {copiedBid ? <Check size={10} /> : <Copy size={10} />}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </article>
     </Link>
@@ -137,6 +181,7 @@ interface FilterState {
   search: string
   category: string
   platform: string
+  gender: string
   styleNode: string
   embeddingStatus: string
   stockStatus: string
@@ -149,6 +194,7 @@ const DEFAULTS: FilterState = {
   search: "",
   category: "",
   platform: "",
+  gender: "",
   styleNode: "",
   embeddingStatus: "all",
   stockStatus: "all",
@@ -161,6 +207,7 @@ const CHIP_LABELS: Record<string, string> = {
   search: "검색",
   category: "카테고리",
   platform: "플랫폼",
+  gender: "성별",
   styleNode: "노드",
   embeddingStatus: "임베딩",
   stockStatus: "재고",
@@ -197,6 +244,7 @@ export default function ProductsPageInner() {
     search: searchParams.get("search") || "",
     category: searchParams.get("category") || "",
     platform: searchParams.get("platform") || "",
+    gender: searchParams.get("gender") || "",
     styleNode: searchParams.get("styleNode") || "",
     embeddingStatus: searchParams.get("embeddingStatus") || "all",
     stockStatus: searchParams.get("stockStatus") || "all",
@@ -270,6 +318,7 @@ export default function ProductsPageInner() {
         search: debouncedSearch,
         category: filters.category,
         platform: filters.platform,
+        gender: filters.gender,
         styleNode: filters.styleNode,
         embeddingStatus: filters.embeddingStatus,
         stockStatus: filters.stockStatus,
@@ -320,6 +369,14 @@ export default function ProductsPageInner() {
     }
     pushIfValue("category")
     pushIfValue("platform")
+    if (filters.gender) {
+      const gLabel = filters.gender
+        .split(",")
+        .filter(Boolean)
+        .map((g) => (g === "men" ? "남" : g === "women" ? "여" : "공용"))
+        .join(",")
+      chips.push({key: "gender", label: `${CHIP_LABELS.gender}: ${gLabel}`, onClear: () => update({gender: ""})})
+    }
     pushIfValue("styleNode")
     pushIfValue("embeddingStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     pushIfValue("stockStatus", "all", (v) => STATUS_LABELS[v] ?? v)
@@ -407,6 +464,33 @@ export default function ProductsPageInner() {
               <OptionList options={options.platforms} includeSelected={filters.platform} />
             )}
           </select>
+          <div className="flex items-center gap-1">
+            {([["men", "남"], ["women", "여"], ["unisex", "공용"]] as const).map(([val, lbl]) => {
+              const selected = filters.gender.split(",").filter(Boolean)
+              const active = selected.includes(val)
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() =>
+                    update({
+                      gender: (active
+                        ? selected.filter((g) => g !== val)
+                        : [...selected, val]
+                      ).join(","),
+                    })
+                  }
+                  className={`h-8 px-2.5 rounded-md border text-xs transition-colors ${
+                    active
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:border-foreground/40"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              )
+            })}
+          </div>
           <select
             value={filters.styleNode}
             onChange={(e) => update({styleNode: e.target.value})}
