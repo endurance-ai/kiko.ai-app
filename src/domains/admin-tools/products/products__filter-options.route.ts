@@ -47,8 +47,12 @@ export async function GET() {
     platformsRes ?? (await groupByFallback("platform"))
   const categories =
     categoriesRes ?? (await groupByFallback("category"))
+  // count_products_by RPC 는 platform/category 만 지원 → subcategory 는 빈 배열 반환.
+  // 빈 배열도 fallback 을 타도록 length 로 판정 (?? 는 빈 배열에 안 걸림).
   const subcategories =
-    subcategoriesRes ?? (await groupByFallback("subcategory"))
+    subcategoriesRes && subcategoriesRes.length > 0
+      ? subcategoriesRes
+      : await groupByFallback("subcategory")
 
   const styleNodes = ((styleNodesRes.data ?? []) as Array<{code: string; name_en: string}>).map(
     (r) => ({value: r.code, label: `${r.code} · ${r.name_en}`})
@@ -78,7 +82,7 @@ function sortByCountDesc(rows: Array<{value: string; count: number}>) {
 // RPC 미존재 환경(또는 신규 migration 074 미적용) fallback.
 // products 전수 fetch 후 클라이언트 그룹바이 — 11만 row 정도라 1회 캐시 acceptable.
 async function groupByFallback(column: "platform" | "category" | "subcategory") {
-  const {data} = await supabase.from("products").select(column)
+  const {data} = await supabase.from("products").select(column).limit(200000)
   const counter = new Map<string, number>()
   for (const row of (data ?? []) as Array<Record<string, string | null>>) {
     const v = row[column]
