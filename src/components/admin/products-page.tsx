@@ -91,7 +91,7 @@ function ProductCard({p}: {p: Product}) {
   }
 
   return (
-    <Link href={`/admin/products/${p.id}`} className="group block">
+    <Link href={`/admin/products/${p.id}`} className="group block" target="_blank" rel="noopener">
       <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
         {/* Image */}
         <div className="aspect-[3/4] relative bg-muted">
