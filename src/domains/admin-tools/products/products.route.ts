@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
   const platform = searchParams.get("platform") || ""
   const brand = sanitize(searchParams.get("brand") || "")
   const styleNodeCode = searchParams.get("styleNode") || ""
+  const gender = searchParams.get("gender") || ""
   const embeddingStatus = searchParams.get("embeddingStatus") || "all" // all | embedded | no_embedding
   const stockStatus = searchParams.get("stockStatus") || "all"
   // 2026-07-29: products.description 제거 → "상세 유무" 필터가 의미를 잃었다.
@@ -73,10 +74,14 @@ export async function GET(request: NextRequest) {
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
+  if (gender === "men") query = query.overlaps("gender", ["men", "unisex"])
+  else if (gender === "women") query = query.overlaps("gender", ["women", "unisex"])
+  else if (gender === "unisex") query = query.overlaps("gender", ["unisex"])
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
   else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 
   query = query.order(orderCol, {ascending: orderAsc, nullsFirst: false})
+  query = query.order("id", {ascending: false})
 
   // embeddingStatus / featureStatus 필터는 결과 page 에서 post-filter
   // (product_embeddings / product_features 를 PostgREST select 로 JOIN 하기 어렵다)
@@ -179,6 +184,7 @@ export async function GET(request: NextRequest) {
     return {
       id: String(p.id),
       brand: p.brand,
+      brandNodeId: p.brand_node_id,
       name: p.name,
       price: p.price,
       sourceCurrency: p.source_currency,
