@@ -8,7 +8,6 @@ import {Check, ChevronLeft, ChevronRight, Copy, Loader2, RotateCcw, Search, X} f
 import {Button} from "@/components/ui/button"
 import type {FilterOptionsResponse} from "@/app/api/admin/products/filter-options/route"
 import {formatProductPrice} from "@/lib/format-product-price"
-import {ALL_SUBCATEGORIES} from "@/shared/enums/product-enums"
 
 type Product = {
   id: string
@@ -471,7 +470,9 @@ export default function ProductsPageInner() {
             className={SELECT_CLASS}
           >
             <option value="">서브카테고리</option>
-            {ALL_SUBCATEGORIES.map((s) => (<option key={s} value={s}>{s}</option>))}
+            {options && (
+              <OptionList options={options.subcategories} includeSelected={filters.subcategory} />
+            )}
           </select>
           <select
             value={filters.platform}
