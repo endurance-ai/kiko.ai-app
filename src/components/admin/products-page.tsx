@@ -72,6 +72,12 @@ function ProductCard({p}: {p: Product}) {
   const [copiedPid, setCopiedPid] = useState(false)
   const [copiedBid, setCopiedBid] = useState(false)
   const tags = [p.category, p.styleNode?.code].filter(Boolean)
+  // 현재 목록 필터를 상세 URL 에 ret 로 실어보냄 → 상세 "상품 목록" 이 그대로 복원.
+  const searchParams = useSearchParams()
+  const ret = searchParams.toString()
+  const detailHref = ret
+    ? `/admin/products/${p.id}?ret=${encodeURIComponent(ret)}`
+    : `/admin/products/${p.id}`
 
   const handleCopyPid = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -90,7 +96,7 @@ function ProductCard({p}: {p: Product}) {
   }
 
   return (
-    <Link href={`/admin/products/${p.id}`} className="group block" target="_blank" rel="noopener">
+    <Link href={detailHref} className="group block" target="_blank" rel="noopener">
       <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
         {/* Image */}
         <div className="aspect-[3/4] relative bg-muted">
@@ -471,7 +477,7 @@ export default function ProductsPageInner() {
         <FilterRow label="상품">
           <select
             value={filters.category}
-            onChange={(e) => update({category: e.target.value})}
+            onChange={(e) => update({category: e.target.value, subcategory: ""})}
             className={SELECT_CLASS}
           >
             <option value="">카테고리</option>
@@ -486,7 +492,14 @@ export default function ProductsPageInner() {
           >
             <option value="">서브카테고리</option>
             {options && (
-              <OptionList options={options.subcategories} includeSelected={filters.subcategory} />
+              <OptionList
+                options={
+                  filters.category
+                    ? options.subcategories.filter((s) => s.category === filters.category)
+                    : options.subcategories
+                }
+                includeSelected={filters.subcategory}
+              />
             )}
           </select>
           <select
