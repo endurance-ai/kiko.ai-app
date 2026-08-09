@@ -101,6 +101,7 @@ export const KOREAN_VOCAB: Record<string, KoreanVocabEntry> = {
   "긴팔티": { subcategory: "t-shirt", category: "Top", keywords: ["긴팔티", "긴팔", "long sleeve tee"] },
   "나시": { subcategory: "tank-top", category: "Top", keywords: ["나시", "민소매", "나시티", "sleeveless"] },
   "민소매": { subcategory: "tank-top", category: "Top", keywords: ["민소매", "나시", "sleeveless"] },
+  "슬리브리스": { subcategory: "tank-top", category: "Top", keywords: ["슬리브리스", "민소매", "나시", "sleeveless"] },
   "나시티": { subcategory: "tank-top", category: "Top", keywords: ["나시티", "나시", "tank top"] },
   "탱크탑": { subcategory: "tank-top", category: "Top", keywords: ["탱크탑", "나시", "tank top"] },
   "니트": { subcategory: "sweater", category: "Top", keywords: ["니트", "knit", "sweater"] },

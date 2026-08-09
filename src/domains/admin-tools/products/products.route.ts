@@ -1,12 +1,26 @@
 import {NextRequest, NextResponse} from "next/server"
 import {requireApprovedAdmin} from "@/lib/admin-auth"
 import {supabase} from "@/lib/supabase"
+import {KOREAN_VOCAB} from "@/shared/enums/korean-vocab"
 
 // SPEC-SEARCH-V6-001 P2: product_ai_analysis (PAI) 폐기 후 어드민 상품 목록.
 // v6 에서 product-level 스타일/색/핏 categorical 라벨은 임베딩이 대체.
 // 어드민 필터는 products 컬럼 + brand_nodes.primary_style_node_id + product_embeddings 만 사용.
 
 const PAGE_SIZE = 60
+
+function expandSearchTerms(raw: string): string[] {
+  const term = raw.trim().toLowerCase()
+  if (!term) return []
+  const out = new Set<string>([raw.trim()])
+  for (const [key, entry] of Object.entries(KOREAN_VOCAB)) {
+    const bag = [key.toLowerCase(), entry.subcategory.toLowerCase(), ...entry.keywords.map((k) => k.toLowerCase())]
+    if (bag.some((k) => k.includes(term) || term.includes(k))) {
+      for (const kw of entry.keywords) out.add(kw)
+    }
+  }
+  return Array.from(out).filter((t) => t.length >= 2).slice(0, 12)
+}
 
 export async function GET(request: NextRequest) {
   const gate = await requireApprovedAdmin()
@@ -17,6 +31,7 @@ export async function GET(request: NextRequest) {
   const sanitize = (s: string) => s.replace(/[.,()\\]/g, "")
   const search = sanitize(searchParams.get("search")?.trim() || "")
   const category = searchParams.get("category") || ""
+  const subcategory = searchParams.get("subcategory") || ""
   const platform = searchParams.get("platform") || ""
   const brand = sanitize(searchParams.get("brand") || "")
   const styleNodeCode = searchParams.get("styleNode") || ""
@@ -64,6 +79,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  let productIdAllowList: number[] | null = null
+  if (subcategory) {
+    const {data: subRows, error: subErr} = await supabase
+      .from("product_features")
+      .select("product_id")
+      .eq("feature_metadata->>item_type", subcategory)
+      .limit(10000)
+    if (subErr) return NextResponse.json({error: subErr.message}, {status: 500})
+    productIdAllowList = (subRows ?? []).map((r) => r.product_id as number)
+    if (productIdAllowList.length === 0) {
+      return NextResponse.json({products: [], total: 0, page, totalPages: 0})
+    }
+  }
+
   let query = supabase
     .from("products")
     .select(
@@ -72,9 +101,17 @@ export async function GET(request: NextRequest) {
     )
 
   if (brandIdAllowList) query = query.in("brand_node_id", brandIdAllowList)
+  if (productIdAllowList) query = query.in("id", productIdAllowList)
   if (stockStatus === "in_stock") query = query.eq("in_stock", true)
   else if (stockStatus === "out_of_stock") query = query.eq("in_stock", false)
-  if (search) query = query.or(`brand.ilike.%${search}%,name.ilike.%${search}%,platform.ilike.%${search}%`)
+  if (search) {
+    const terms = expandSearchTerms(search)
+    const ors = terms.flatMap((t) => {
+      const s = t.replace(/[%,()]/g, "")
+      return [`brand.ilike.%${s}%`, `name.ilike.%${s}%`]
+    })
+    if (ors.length > 0) query = query.or(ors.join(","))
+  }
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)

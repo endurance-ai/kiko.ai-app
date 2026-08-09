@@ -1,6 +1,6 @@
 "use client"
 
-import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import {useRouter, useSearchParams} from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
@@ -8,6 +8,7 @@ import {Check, ChevronLeft, ChevronRight, Copy, Loader2, RotateCcw, Search, X} f
 import {Button} from "@/components/ui/button"
 import type {FilterOptionsResponse} from "@/app/api/admin/products/filter-options/route"
 import {formatProductPrice} from "@/lib/format-product-price"
+import {ALL_SUBCATEGORIES} from "@/shared/enums/product-enums"
 
 type Product = {
   id: string
@@ -180,6 +181,7 @@ function ProductCard({p}: {p: Product}) {
 interface FilterState {
   search: string
   category: string
+  subcategory: string
   platform: string
   gender: string
   styleNode: string
@@ -193,6 +195,7 @@ interface FilterState {
 const DEFAULTS: FilterState = {
   search: "",
   category: "",
+  subcategory: "",
   platform: "",
   gender: "",
   styleNode: "",
@@ -206,6 +209,7 @@ const DEFAULTS: FilterState = {
 const CHIP_LABELS: Record<string, string> = {
   search: "검색",
   category: "카테고리",
+  subcategory: "서브카테고리",
   platform: "플랫폼",
   gender: "성별",
   styleNode: "노드",
@@ -243,6 +247,7 @@ export default function ProductsPageInner() {
   const [filters, setFilters] = useState<FilterState>(() => ({
     search: searchParams.get("search") || "",
     category: searchParams.get("category") || "",
+    subcategory: searchParams.get("subcategory") || "",
     platform: searchParams.get("platform") || "",
     gender: searchParams.get("gender") || "",
     styleNode: searchParams.get("styleNode") || "",
@@ -284,22 +289,10 @@ export default function ProductsPageInner() {
     }
   }, [])
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const searchMountRef = useRef(false)
-  useEffect(() => {
-    // 초기 마운트(뒤로가기 복원 포함)엔 page 리셋 안 함 — URL 의 page 유지.
-    if (!searchMountRef.current) {
-      searchMountRef.current = true
-      return
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(filters.search)
-      setPage(0)
-    }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
+  // 검색은 버튼 클릭/Enter 시에만 실행 (자동 디바운스 제거) — 확장검색 부하 절감.
+  const submitSearch = useCallback(() => {
+    setDebouncedSearch(filters.search)
+    setPage(0)
   }, [filters.search])
 
   useEffect(() => {
@@ -323,6 +316,7 @@ export default function ProductsPageInner() {
         page: String(page),
         search: debouncedSearch,
         category: filters.category,
+        subcategory: filters.subcategory,
         platform: filters.platform,
         gender: filters.gender,
         styleNode: filters.styleNode,
@@ -374,6 +368,7 @@ export default function ProductsPageInner() {
       })
     }
     pushIfValue("category")
+    pushIfValue("subcategory")
     pushIfValue("platform")
     if (filters.gender) {
       const gLabel = filters.gender
@@ -421,12 +416,22 @@ export default function ProductsPageInner() {
           <div className="relative flex-1 min-w-[200px] max-w-[320px]">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <input
-              placeholder="브랜드/이름/플랫폼 검색..."
+              placeholder="브랜드/이름 검색 (한/영, Enter)"
               value={filters.search}
               onChange={(e) => setFilters((p) => ({...p, search: e.target.value}))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitSearch()
+              }}
               className="h-8 w-full text-xs border border-border rounded-md bg-background pl-8 pr-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/40"
             />
           </div>
+          <button
+            type="button"
+            onClick={submitSearch}
+            className="h-8 px-3 rounded-md border border-foreground bg-foreground text-background text-xs transition-colors hover:opacity-90"
+          >
+            검색
+          </button>
           <select
             value={filters.sort}
             onChange={(e) => update({sort: e.target.value})}
@@ -459,6 +464,14 @@ export default function ProductsPageInner() {
             {options && (
               <OptionList options={options.categories} includeSelected={filters.category} />
             )}
+          </select>
+          <select
+            value={filters.subcategory}
+            onChange={(e) => update({subcategory: e.target.value})}
+            className={SELECT_CLASS}
+          >
+            <option value="">서브카테고리</option>
+            {ALL_SUBCATEGORIES.map((s) => (<option key={s} value={s}>{s}</option>))}
           </select>
           <select
             value={filters.platform}
