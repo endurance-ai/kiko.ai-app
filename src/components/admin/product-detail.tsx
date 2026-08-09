@@ -2,7 +2,7 @@
 
 import {useState, useRef, type KeyboardEvent} from "react"
 import Image from "next/image"
-import Link from "next/link"
+import {useRouter} from "next/navigation"
 import {ArrowUpRight, ChevronLeft} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {formatProductPrice} from "@/lib/format-product-price"
@@ -57,6 +57,7 @@ type ProductDetailProps = {
 }
 
 export function ProductDetail({product, styleNode, hasEmbedding, embeddedAt, reviews}: ProductDetailProps) {
+  const router = useRouter()
   // 이미지 갤러리: image_url 우선 + images[] 합쳐서 dedupe
   const gallery: string[] = (() => {
     const seen = new Set<string>()
@@ -114,14 +115,18 @@ export function ProductDetail({product, styleNode, hasEmbedding, embeddedAt, rev
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Back link */}
-      {/* 상세는 새 탭으로 열리므로 목록 탭은 그대로 보존됨 — 이 링크는 새 탭 안에서 목록으로 */}
-      <Link
-        href="/admin/products"
+      {/* 카드가 넘긴 ret(목록 필터)로 목록 복원 — 없으면 기본 목록 */}
+      <button
+        type="button"
+        onClick={() => {
+          const ret = new URLSearchParams(window.location.search).get("ret")
+          router.push(ret ? `/admin/products?${ret}` : "/admin/products")
+        }}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-4" />
         상품 목록
-      </Link>
+      </button>
 
       {/* Main layout — md(768px) 부터 2단 */}
       <div className="flex flex-col gap-6 md:flex-row">
