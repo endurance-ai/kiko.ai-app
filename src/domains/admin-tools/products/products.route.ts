@@ -60,10 +60,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 성별 필터는 상품 단위 정확도를 위해 product_features 의 VLM 판정
+  // (feature_metadata->>gender)으로 건다. products.gender 는 브랜드 상속 등으로
+  // 오염돼 있어(예: 여성 비키니가 unisex/men 으로 태깅) 신뢰도가 낮다. (2026-08-09)
+  const genderValues =
+    gender === "men"
+      ? ["men", "unisex"]
+      : gender === "women"
+        ? ["women", "unisex"]
+        : gender === "unisex"
+          ? ["unisex"]
+          : null
+
+  const cols =
+    "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count"
+
   let query = supabase
     .from("products")
     .select(
-      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count",
+      genderValues ? `${cols}, product_features!inner(feature_metadata)` : cols,
       {count: "exact"}
     )
 
@@ -74,9 +89,7 @@ export async function GET(request: NextRequest) {
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
-  if (gender === "men") query = query.overlaps("gender", ["men", "unisex"])
-  else if (gender === "women") query = query.overlaps("gender", ["women", "unisex"])
-  else if (gender === "unisex") query = query.overlaps("gender", ["unisex"])
+  if (genderValues) query = query.in("product_features.feature_metadata->>gender", genderValues)
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
   else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 
