@@ -369,7 +369,14 @@ export default function ProductsPageInner() {
     }
     pushIfValue("category")
     pushIfValue("platform")
-    pushIfValue("gender", "", (v) => v === "men" ? "남" : v === "women" ? "여" : v === "unisex" ? "공용" : v)
+    if (filters.gender) {
+      const gLabel = filters.gender
+        .split(",")
+        .filter(Boolean)
+        .map((g) => (g === "men" ? "남" : g === "women" ? "여" : "공용"))
+        .join(",")
+      chips.push({key: "gender", label: `${CHIP_LABELS.gender}: ${gLabel}`, onClear: () => update({gender: ""})})
+    }
     pushIfValue("styleNode")
     pushIfValue("embeddingStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     pushIfValue("stockStatus", "all", (v) => STATUS_LABELS[v] ?? v)
@@ -457,16 +464,33 @@ export default function ProductsPageInner() {
               <OptionList options={options.platforms} includeSelected={filters.platform} />
             )}
           </select>
-          <select
-            value={filters.gender}
-            onChange={(e) => update({gender: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="">성별</option>
-            <option value="men">남</option>
-            <option value="women">여</option>
-            <option value="unisex">공용</option>
-          </select>
+          <div className="flex items-center gap-1">
+            {([["men", "남"], ["women", "여"], ["unisex", "공용"]] as const).map(([val, lbl]) => {
+              const selected = filters.gender.split(",").filter(Boolean)
+              const active = selected.includes(val)
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() =>
+                    update({
+                      gender: (active
+                        ? selected.filter((g) => g !== val)
+                        : [...selected, val]
+                      ).join(","),
+                    })
+                  }
+                  className={`h-8 px-2.5 rounded-md border text-xs transition-colors ${
+                    active
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:border-foreground/40"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              )
+            })}
+          </div>
           <select
             value={filters.styleNode}
             onChange={(e) => update({styleNode: e.target.value})}
