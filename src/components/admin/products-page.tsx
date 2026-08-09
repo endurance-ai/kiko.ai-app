@@ -335,7 +335,22 @@ export default function ProductsPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [page, debouncedSearch, filters])
+    // 검색어(filters.search)는 debouncedSearch 로만 트리거 — 타이핑마다 재fetch 방지.
+    // 따라서 filters 객체 전체가 아니라 검색 외 필터 필드만 의존성에 둔다.
+  }, [
+    page,
+    debouncedSearch,
+    filters.category,
+    filters.subcategory,
+    filters.platform,
+    filters.gender,
+    filters.styleNode,
+    filters.embeddingStatus,
+    filters.stockStatus,
+    filters.featureStatus,
+    filters.reviewStatus,
+    filters.sort,
+  ])
 
   useEffect(() => {
     fetchProducts()
