@@ -2,6 +2,7 @@
 
 import {useState, useRef, type KeyboardEvent} from "react"
 import Image from "next/image"
+import Link from "next/link"
 import {ArrowUpRight, ChevronLeft} from "lucide-react"
 import {cn} from "@/lib/utils"
 import {formatProductPrice} from "@/lib/format-product-price"
@@ -113,15 +114,14 @@ export function ProductDetail({product, styleNode, hasEmbedding, embeddedAt, rev
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Back link */}
-      {/* 필터/페이지 유지: 새 URL 로 이동하지 않고 히스토리 뒤로 (목록의 검색 상태 복원) */}
-      <button
-        type="button"
-        onClick={() => window.history.back()}
+      {/* 상세는 새 탭으로 열리므로 목록 탭은 그대로 보존됨 — 이 링크는 새 탭 안에서 목록으로 */}
+      <Link
+        href="/admin/products"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-4" />
         상품 목록
-      </button>
+      </Link>
 
       {/* Main layout — md(768px) 부터 2단 */}
       <div className="flex flex-col gap-6 md:flex-row">

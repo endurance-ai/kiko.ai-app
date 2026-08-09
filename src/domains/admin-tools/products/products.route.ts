@@ -79,20 +79,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let productIdAllowList: number[] | null = null
-  if (subcategory) {
-    const {data: subRows, error: subErr} = await supabase
-      .from("product_features")
-      .select("product_id")
-      .eq("feature_metadata->>item_type", subcategory)
-      .limit(10000)
-    if (subErr) return NextResponse.json({error: subErr.message}, {status: 500})
-    productIdAllowList = (subRows ?? []).map((r) => r.product_id as number)
-    if (productIdAllowList.length === 0) {
-      return NextResponse.json({products: [], total: 0, page, totalPages: 0})
-    }
-  }
-
   let query = supabase
     .from("products")
     .select(
@@ -101,7 +87,8 @@ export async function GET(request: NextRequest) {
     )
 
   if (brandIdAllowList) query = query.in("brand_node_id", brandIdAllowList)
-  if (productIdAllowList) query = query.in("id", productIdAllowList)
+  // 서브카테고리는 products.subcategory 직접 컬럼(백필됨, ~11만) 으로 필터
+  if (subcategory) query = query.eq("subcategory", subcategory)
   if (stockStatus === "in_stock") query = query.eq("in_stock", true)
   else if (stockStatus === "out_of_stock") query = query.eq("in_stock", false)
   if (search) {
