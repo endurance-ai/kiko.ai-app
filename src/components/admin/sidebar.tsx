@@ -9,6 +9,7 @@ import {
     Database,
     FileText,
     Inbox,
+    LayoutGrid,
     ListChecks,
     MousePointerClick,
     Palette,
@@ -30,6 +31,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "데이터",
     items: [
+      {href: "/admin/curation", label: "큐레이션 구좌", description: "앱 메인 구좌 편성", icon: LayoutGrid},
       {href: "/admin/style-nodes", label: "스타일 노드", description: "스타일 분류 체계 관리", icon: Palette},
       {href: "/admin/brand-nodes", label: "브랜드 노드", description: "브랜드 + 분류 + 대표상품", icon: Database},
       {href: "/admin/brand-clusters", label: "브랜드 클러스터", description: "이미지 임베딩 2D 지도", icon: Sparkles},
