@@ -379,17 +379,16 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
                 searching && "opacity-60"
               )}
             >
-              {searchProducts.map((product) => {
+              {searchProducts.map((product, index) => {
                 const id = Number(product.id)
                 const selected = selectedIds.includes(id)
                 return (
                   <article
                     key={product.id}
                     className="overflow-hidden rounded-lg border"
-                    style={{contentVisibility: "auto", containIntrinsicSize: "240px"}}
                   >
                     <div className="relative aspect-[3/4] bg-muted">
-                      <ProductImage src={product.imageUrl} alt={product.name} />
+                      <ProductImage src={product.imageUrl} alt={product.name} eager={index < 8} />
                       <button disabled={selected || selectedIds.length >= MAX_CURATION_PRODUCTS} onClick={() => void addIds([id])} className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-background shadow disabled:opacity-50" aria-label="상품 추가"><Plus className="size-4" /></button>
                     </div>
                     <div className="space-y-0.5 p-2 text-xs"><div className="truncate font-medium">{product.brand}</div><div className="line-clamp-2 min-h-8 text-muted-foreground">{product.name}</div><div className="flex justify-between"><span>{product.price == null ? "가격 없음" : currency.format(product.price)}</span><span className="font-mono text-muted-foreground">{product.id}</span></div></div>
@@ -412,7 +411,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
                 return (
                   <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-destructive ring-1 ring-destructive/30")}>
                     <div className="relative aspect-[3/4] bg-muted">
-                      <ProductImage src={product?.image_url ?? null} alt={product?.name ?? `상품 ${id}`} missingLabel="상품 정보를 찾을 수 없음" />
+                      <ProductImage src={product?.image_url ?? null} alt={product?.name ?? `상품 ${id}`} missingLabel="상품 정보를 찾을 수 없음" eager={index < 4} />
                       <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-xs font-semibold shadow">{index + 1}</span>
                       <GripVertical className="absolute right-2 top-2 size-5 cursor-grab rounded bg-background/90 p-0.5" />
                       <button onClick={() => removeId(id)} className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-background shadow" aria-label="상품 제거"><X className="size-4" /></button>
@@ -438,13 +437,15 @@ function ProductImage({
   src,
   alt,
   missingLabel = "이미지 없음",
+  eager = false,
 }: {
   src: string | null
   alt: string
   missingLabel?: string
+  eager?: boolean
 }) {
-  const [loaded, setLoaded] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const failed = Boolean(src) && failedSrc === src
 
   if (!src || failed) {
     return (
@@ -455,21 +456,17 @@ function ProductImage({
   }
 
   return (
-    <>
-      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted-foreground/10" />}
-      <Image
-        src={src}
-        alt={alt}
-        fill
-        sizes="(min-width: 1536px) 160px, (min-width: 1280px) 180px, 25vw"
-        className={cn("object-cover transition-opacity", loaded ? "opacity-100" : "opacity-0")}
-        unoptimized
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
-      />
-    </>
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="(min-width: 1536px) 160px, (min-width: 1280px) 180px, (min-width: 640px) 33vw, 50vw"
+      className="object-cover"
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "auto"}
+      decoding="async"
+      draggable={false}
+      onError={() => setFailedSrc(src)}
+    />
   )
 }
