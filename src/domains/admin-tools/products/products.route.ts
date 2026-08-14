@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const page = Math.max(0, parseInt(searchParams.get("page") || "0") || 0)
   const sanitize = (s: string) => s.replace(/[.,()\\]/g, "")
   const search = sanitize(searchParams.get("search")?.trim() || "")
+  const mode = searchParams.get("mode") || ""
   const category = searchParams.get("category") || ""
   const subcategory = searchParams.get("subcategory") || ""
   const platform = searchParams.get("platform") || ""
@@ -40,6 +41,10 @@ export async function GET(request: NextRequest) {
     .split(",")
     .map((g) => g.trim())
     .filter((g) => g === "men" || g === "women" || g === "unisex")
+  const effectiveGenders =
+    mode === "curation" && genders.length === 1 && genders[0] !== "unisex"
+      ? [genders[0], "unisex"]
+      : genders
   const embeddingStatus = searchParams.get("embeddingStatus") || "all" // all | embedded | no_embedding
   const stockStatus = searchParams.get("stockStatus") || "all"
   // 2026-07-29: products.description 제거 → "상세 유무" 필터가 의미를 잃었다.
@@ -87,22 +92,29 @@ export async function GET(request: NextRequest) {
     )
 
   if (brandIdAllowList) query = query.in("brand_node_id", brandIdAllowList)
+  if (mode === "curation") {
+    query = query.eq("in_stock", true).not("image_url", "is", null).neq("image_url", "").gte("price", 5000)
+  }
   // 서브카테고리는 products.subcategory 직접 컬럼(백필됨, ~11만) 으로 필터
   if (subcategory) query = query.eq("subcategory", subcategory)
   if (stockStatus === "in_stock") query = query.eq("in_stock", true)
   else if (stockStatus === "out_of_stock") query = query.eq("in_stock", false)
   if (search) {
-    const terms = expandSearchTerms(search)
-    const ors = terms.flatMap((t) => {
-      const s = t.replace(/[%,()]/g, "")
-      return [`brand.ilike.%${s}%`, `name.ilike.%${s}%`]
-    })
-    if (ors.length > 0) query = query.or(ors.join(","))
+    if (/^\d+$/.test(search)) {
+      query = query.eq("id", Number(search))
+    } else {
+      const terms = expandSearchTerms(search)
+      const ors = terms.flatMap((t) => {
+        const s = t.replace(/[%,()]/g, "")
+        return [`brand.ilike.%${s}%`, `name.ilike.%${s}%`]
+      })
+      if (ors.length > 0) query = query.or(ors.join(","))
+    }
   }
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
-  if (genders.length > 0) query = query.overlaps("gender", genders)
+  if (effectiveGenders.length > 0) query = query.overlaps("gender", effectiveGenders)
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
   else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 

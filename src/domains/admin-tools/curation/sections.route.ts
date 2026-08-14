@@ -10,6 +10,7 @@ import {
   previewFeed,
   saveSection,
 } from "./ai-client"
+import {getEditorialActivationBlocker, MAX_CURATION_PRODUCTS} from "./editor-utils"
 
 // 브라우저 → 이 라우트 → ai-server. 프록시를 두는 이유는 INTERNAL_API_TOKEN 을
 // 서버에만 두기 위해서다 — 클라이언트가 ai-server 를 직접 부르면 토큰이 노출된다.
@@ -64,12 +65,36 @@ export async function PUT(req: NextRequest) {
   const denied = await gate()
   if (denied) return denied
 
-  const body = await req.json().catch(() => null)
+  const body = await req.json().catch(() => null) as Record<string, unknown> | null
   if (!body || typeof body !== "object") {
     return NextResponse.json({error: "invalid body"}, {status: 400})
   }
 
-  const result = await saveSection(body)
+  if (body.slot_type === "editorial") {
+    const ids = Array.isArray(body.product_ids)
+      ? [...new Set(body.product_ids.filter((id): id is number => Number.isSafeInteger(id)))]
+      : []
+    if (ids.length > MAX_CURATION_PRODUCTS) {
+      return NextResponse.json(
+        {error: `editorial 구좌에는 상품을 최대 ${MAX_CURATION_PRODUCTS}개까지 등록할 수 있습니다.`},
+        {status: 422}
+      )
+    }
+    body.product_ids = ids
+
+    if (body.is_active === true) {
+      const gender = body.gender === "women" || body.gender === "men" ? body.gender : null
+      if (!gender) return NextResponse.json({error: "gender must be women|men"}, {status: 400})
+      const lookup = ids.length > 0
+        ? await lookupProducts(gender, ids)
+        : {products: [], missing: []}
+      if (isAiError(lookup)) return NextResponse.json({error: lookup.error}, {status: 502})
+      const blocker = getEditorialActivationBlocker(ids, lookup.products, lookup.missing)
+      if (blocker) return NextResponse.json({error: blocker}, {status: 422})
+    }
+  }
+
+  const result = await saveSection(body as Parameters<typeof saveSection>[0])
   if (isAiError(result)) return NextResponse.json({error: result.error}, {status: 502})
   return NextResponse.json(result)
 }
