@@ -41,7 +41,6 @@ type ProductDetailProps = {
     subcategory: string | null
     gender: string[] | null
     in_stock: boolean
-    color: string | null
     description: string | null
     tags: string[] | null
     size_info: string | null
@@ -50,13 +49,14 @@ type ProductDetailProps = {
     crawled_at: string | null
     updated_at: string | null
   }
+  primaryColor: string | null
   styleNode: {code: string; name_en: string} | null
   hasEmbedding: boolean
   embeddedAt: string | null
   reviews: Review[]
 }
 
-export function ProductDetail({product, styleNode, hasEmbedding, embeddedAt, reviews}: ProductDetailProps) {
+export function ProductDetail({product, primaryColor, styleNode, hasEmbedding, embeddedAt, reviews}: ProductDetailProps) {
   const router = useRouter()
   // 이미지 갤러리: image_url 우선 + images[] 합쳐서 dedupe
   const gallery: string[] = (() => {
@@ -108,7 +108,7 @@ export function ProductDetail({product, styleNode, hasEmbedding, embeddedAt, rev
   infoRows.push(["in_stock", String(product.in_stock)])
   if (product.category) infoRows.push(["category", product.category])
   if (product.subcategory) infoRows.push(["subcategory", product.subcategory])
-  if (product.color) infoRows.push(["color", product.color])
+  if (primaryColor) infoRows.push(["color", primaryColor])
   if (product.tags?.length) infoRows.push(["tags", product.tags.join(", ")])
   if (product.size_info) infoRows.push(["size_info", product.size_info])
 

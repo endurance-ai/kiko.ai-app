@@ -9,7 +9,7 @@ export default async function ProductDetailPage({
 }) {
   const {id} = await params
 
-  const [productRes, reviewsRes] = await Promise.all([
+  const [productRes, reviewsRes, featuresRes] = await Promise.all([
     supabase.from("products").select("*").eq("id", id).single(),
     supabase
       .from("product_reviews")
@@ -17,6 +17,11 @@ export default async function ProductDetailPage({
       .eq("product_id", id)
       .order("created_at", {ascending: false})
       .limit(50),
+    supabase
+      .from("product_features")
+      .select("feature_metadata")
+      .eq("product_id", id)
+      .maybeSingle(),
   ])
 
   if (productRes.error) notFound()
@@ -41,10 +46,14 @@ export default async function ProductDetailPage({
   const styleNode =
     (styleRes.data as {style_nodes: {code: string; name_en: string} | null} | null)
       ?.style_nodes ?? null
+  const featureMetadata =
+    (featuresRes.data as {feature_metadata: Record<string, unknown>} | null)?.feature_metadata ?? null
+  const primaryColor = (featureMetadata?.primary_color as string | undefined) ?? null
 
   return (
     <ProductDetail
       product={product}
+      primaryColor={primaryColor}
       styleNode={styleNode}
       hasEmbedding={!!embRes.data}
       embeddedAt={(embRes.data as {embedded_at?: string} | null)?.embedded_at ?? null}
