@@ -66,7 +66,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
   const [query, setQuery] = useState("")
   const [searchPage, setSearchPage] = useState(0)
   const [searchProducts, setSearchProducts] = useState<SearchProduct[]>([])
-  const [searchTotalPages, setSearchTotalPages] = useState(0)
+  const [searchHasMore, setSearchHasMore] = useState(false)
   const [loading, setLoading] = useState(!isNew)
   const [searching, setSearching] = useState(false)
   const [busy, setBusy] = useState<"save" | "delete" | null>(null)
@@ -147,7 +147,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
           const data = await response.json()
           if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`)
           setSearchProducts(data.products as SearchProduct[])
-          setSearchTotalPages(data.totalPages as number)
+          setSearchHasMore(Boolean(data.hasMore))
         } catch (err) {
           if ((err as Error).name !== "AbortError") setMessage(`상품 검색 실패: ${(err as Error).message}`)
         } finally {
@@ -372,14 +372,24 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
               <input value={query} onChange={(event) => {setQuery(event.target.value); setSearchPage(0)}} placeholder="브랜드, 상품명, 상품 ID 검색" className={cn(CONTROL_CLASS, "pl-9")} />
               {searching && <Loader2 className="absolute right-3 top-3 size-4 animate-spin" />}
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
+            <div
+              aria-busy={searching}
+              className={cn(
+                "grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4",
+                searching && "opacity-60"
+              )}
+            >
               {searchProducts.map((product) => {
                 const id = Number(product.id)
                 const selected = selectedIds.includes(id)
                 return (
-                  <article key={product.id} className="overflow-hidden rounded-lg border">
+                  <article
+                    key={product.id}
+                    className="overflow-hidden rounded-lg border"
+                    style={{contentVisibility: "auto", containIntrinsicSize: "240px"}}
+                  >
                     <div className="relative aspect-[3/4] bg-muted">
-                      {product.imageUrl && <Image src={product.imageUrl} alt="" fill sizes="180px" className="object-cover" unoptimized />}
+                      <ProductImage src={product.imageUrl} alt={product.name} />
                       <button disabled={selected || selectedIds.length >= MAX_CURATION_PRODUCTS} onClick={() => void addIds([id])} className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-background shadow disabled:opacity-50" aria-label="상품 추가"><Plus className="size-4" /></button>
                     </div>
                     <div className="space-y-0.5 p-2 text-xs"><div className="truncate font-medium">{product.brand}</div><div className="line-clamp-2 min-h-8 text-muted-foreground">{product.name}</div><div className="flex justify-between"><span>{product.price == null ? "가격 없음" : currency.format(product.price)}</span><span className="font-mono text-muted-foreground">{product.id}</span></div></div>
@@ -388,7 +398,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
               })}
             </div>
             {!searching && searchProducts.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">검색 결과가 없습니다.</div>}
-            <div className="flex items-center justify-center gap-3 text-sm"><button disabled={searchPage === 0} onClick={() => setSearchPage((page) => page - 1)} className="rounded border p-1 disabled:opacity-30"><ChevronLeft className="size-4" /></button><span>{searchPage + 1} / {Math.max(1, searchTotalPages)}</span><button disabled={searchPage + 1 >= searchTotalPages} onClick={() => setSearchPage((page) => page + 1)} className="rounded border p-1 disabled:opacity-30"><ChevronRight className="size-4" /></button></div>
+            <div className="flex items-center justify-center gap-3 text-sm"><button disabled={searching || searchPage === 0} onClick={() => setSearchPage((page) => page - 1)} className="rounded border p-1 disabled:opacity-30"><ChevronLeft className="size-4" /></button><span>{searchPage + 1}페이지</span><button disabled={searching || !searchHasMore} onClick={() => setSearchPage((page) => page + 1)} className="rounded border p-1 disabled:opacity-30"><ChevronRight className="size-4" /></button></div>
           </section>
 
           <section className="flex min-w-0 flex-col gap-4 rounded-lg border bg-background p-4">
@@ -402,7 +412,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
                 return (
                   <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-destructive ring-1 ring-destructive/30")}>
                     <div className="relative aspect-[3/4] bg-muted">
-                      {product?.image_url ? <Image src={product.image_url} alt="" fill sizes="180px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted-foreground">상품 정보를 찾을 수 없음</div>}
+                      <ProductImage src={product?.image_url ?? null} alt={product?.name ?? `상품 ${id}`} missingLabel="상품 정보를 찾을 수 없음" />
                       <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-xs font-semibold shadow">{index + 1}</span>
                       <GripVertical className="absolute right-2 top-2 size-5 cursor-grab rounded bg-background/90 p-0.5" />
                       <button onClick={() => removeId(id)} className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-background shadow" aria-label="상품 제거"><X className="size-4" /></button>
@@ -422,4 +432,44 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
 
 function Field({label, children}: {label: string; children: React.ReactNode}) {
   return <div><label className="mb-1.5 block text-xs text-muted-foreground">{label}</label>{children}</div>
+}
+
+function ProductImage({
+  src,
+  alt,
+  missingLabel = "이미지 없음",
+}: {
+  src: string | null
+  alt: string
+  missingLabel?: string
+}) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  if (!src || failed) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-xs text-muted-foreground">
+        {failed ? "이미지 로드 실패" : missingLabel}
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {!loaded && <div className="absolute inset-0 animate-pulse bg-muted-foreground/10" />}
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes="(min-width: 1536px) 160px, (min-width: 1280px) 180px, 25vw"
+        className={cn("object-cover transition-opacity", loaded ? "opacity-100" : "opacity-0")}
+        unoptimized
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </>
+  )
 }
