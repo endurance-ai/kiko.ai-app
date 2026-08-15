@@ -151,7 +151,7 @@ export default function CurationAdminPage() {
                 section.is_active &&
                 section.slot_type === "editorial" &&
                 section.shown < SECTION_SIZE
-              const visibleIds = section.product_ids.slice(0, 20)
+              const visibleIds = section.product_ids
               return (
                 <tr
                   key={`${section.section_id}:${section.gender}`}
@@ -208,11 +208,7 @@ export default function CurationAdminPage() {
                     )}
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {section.product_ids.length > 20 ? (
-                      <span className="font-medium text-amber-600">20 / {section.product_ids.length}</span>
-                    ) : (
-                      `${section.product_ids.length} / ${section.live_count}`
-                    )}
+                    {`${section.product_ids.length} / ${section.live_count}`}
                   </td>
                   <td className={cn("px-3 py-3 text-right tabular-nums", thin && "font-semibold text-amber-600")}>
                     {section.shown}
