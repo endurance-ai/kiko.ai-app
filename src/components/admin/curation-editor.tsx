@@ -189,11 +189,14 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
     }
   }
 
-  const removeId = (id: number) => {
-    const next = selectedIds.filter((item) => item !== id)
+  const removeIds = (ids: number[]) => {
+    const drop = new Set(ids)
+    const next = selectedIds.filter((item) => !drop.has(item))
     setIds(next)
     void verifyProducts(next, draft.gender).catch((err) => setMessage((err as Error).message))
   }
+
+  const removeId = (id: number) => removeIds([id])
 
   const reorder = (from: number, to: number) => setIds(moveProductId(selectedIds, from, to))
 
@@ -267,10 +270,13 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
     }
   }
 
-  const invalidCount = useMemo(
-    () => selectedIds.filter((id) => !productMap.get(id)?.eligible).length,
+  // 못 뜨는 이유를 둘로 나눈다 — 없는 ID 는 오타/폐기 상품이고, 노출 불가는
+  // 품절·이미지 없음·가격 미달·성별 불일치다. 운영자가 할 일이 서로 다르다.
+  const invalidIds = useMemo(
+    () => selectedIds.filter((id) => !productMap.get(id)?.eligible),
     [productMap, selectedIds]
   )
+  const missingSet = useMemo(() => new Set(missingIds), [missingIds])
   const isAuto = draft.slot_type === "auto"
 
   if (loading) {
@@ -385,16 +391,30 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
           <section className="flex min-w-0 flex-col gap-4 rounded-lg border bg-background p-4">
             <div className="flex items-start gap-2"><div><h2 className="font-medium">선택 상품 <span className="tabular-nums">{selectedIds.length}개</span></h2><p className="mt-1 text-xs text-muted-foreground">카드를 드래그하거나 화살표를 눌러 모바일 노출 순서를 바꿉니다.</p></div>{selectedIds.length > 0 && selectedIds.length < CURATION_WARNING_MIN && <span className="ml-auto rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-700">12개 미만</span>}</div>
             <div className="flex gap-2"><textarea value={batchText} onChange={(event) => setBatchText(event.target.value)} rows={2} placeholder="상품 ID 여러 개 붙여넣기 (쉼표, 공백, 줄바꿈 구분)" className={cn(CONTROL_CLASS, "min-h-16 resize-none font-mono text-xs")} /><button onClick={() => void addIds(parseProductIds(batchText))} disabled={!batchText.trim()} className="shrink-0 rounded-md border px-3 text-sm disabled:opacity-50">추가</button></div>
-            {(missingIds.length > 0 || invalidCount > 0) && <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">존재하지 않거나 노출할 수 없는 상품 {Math.max(missingIds.length, invalidCount)}개가 포함되어 있습니다. 활성 저장 전에 제거해 주세요.</div>}
+            {invalidIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                <span>빨간 테두리 {invalidIds.length}개는 앱에 뜨지 않습니다 —</span>
+                <span className="font-mono">{invalidIds.join(", ")}</span>
+                <button
+                  onClick={() => removeIds(invalidIds)}
+                  className="ml-auto shrink-0 rounded border border-destructive px-2 py-0.5 font-medium"
+                >
+                  {invalidIds.length}개 모두 제거
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4">
               {selectedIds.map((id, index) => {
                 const product = productMap.get(id)
                 const invalid = !product?.eligible
+                const invalidLabel = missingSet.has(id) || !product ? "없는 ID" : "노출 불가"
                 return (
-                  <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-destructive ring-1 ring-destructive/30")}>
+                  <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-2 border-destructive ring-2 ring-destructive/25")}>
                     <div className="relative aspect-[3/4] bg-muted">
                       <ProductImage src={product?.image_url ?? null} alt={product?.name ?? `상품 ${id}`} missingLabel="상품 정보를 찾을 수 없음" eager={index < 4} />
                       <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-xs font-semibold shadow">{index + 1}</span>
+                      {/* right-11 — 우하단 제거 버튼과 겹치지 않게 */}
+                      {invalid && <span className="absolute bottom-2 left-2 right-11 truncate rounded bg-destructive px-1.5 py-0.5 text-center text-xs font-semibold text-destructive-foreground shadow">{invalidLabel}</span>}
                       <GripVertical className="absolute right-2 top-2 size-5 cursor-grab rounded bg-background/90 p-0.5" />
                       <button onClick={() => removeId(id)} className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-background shadow" aria-label="상품 제거"><X className="size-4" /></button>
                     </div>
@@ -444,6 +464,11 @@ function ProductImage({
       fill
       sizes="(min-width: 1536px) 160px, (min-width: 1280px) 180px, (min-width: 640px) 33vw, 50vw"
       className="object-cover"
+      // 상품 이미지 호스트는 크롤 대상만큼 늘어나므로 next.config 의
+      // remotePatterns 로 따라잡을 수 없다. 목록 화면(admin/curation/page.tsx)과
+      // 같이 최적화를 건너뛴다 — 허용목록에 없는 호스트는 /_next/image 가 400 을
+      // 주고, 그게 카드마다 "이미지 로드 실패" 로 보였다.
+      unoptimized
       loading={eager ? "eager" : "lazy"}
       fetchPriority={eager ? "high" : "auto"}
       decoding="async"
