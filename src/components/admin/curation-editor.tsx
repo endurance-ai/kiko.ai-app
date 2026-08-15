@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react"
 import {cn} from "@/lib/utils"
-import type {CurationProduct, CurationSection, Gender} from "@/domains/admin-tools/curation/types"
+import type {CurationProduct, CurationSection, Gender, IneligibleReason} from "@/domains/admin-tools/curation/types"
 import {
   appendProductIds,
   CURATION_WARNING_MIN,
@@ -53,6 +53,16 @@ const EMPTY_SECTION: CurationSection = {
 
 const currency = new Intl.NumberFormat("ko-KR", {style: "currency", currency: "KRW", maximumFractionDigits: 0})
 const CONTROL_CLASS = "w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-foreground/50 disabled:cursor-not-allowed disabled:opacity-60"
+
+// 서버가 주는 사유 코드를 그대로 라벨로 옮긴다. `unknown` 은 서버가 새 사유를
+// 추가하고 여기가 아직 못 따라간 경우의 폴백 — 빈 배지보다 낫다.
+const INELIGIBLE_LABEL: Record<IneligibleReason | "unknown", string> = {
+  out_of_stock: "품절",
+  no_image: "이미지 없음",
+  price_too_low: "가격 미달",
+  gender_mismatch: "성별 불일치",
+  unknown: "노출 불가",
+}
 
 export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?: string}) {
   const router = useRouter()
@@ -407,7 +417,8 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
               {selectedIds.map((id, index) => {
                 const product = productMap.get(id)
                 const invalid = !product?.eligible
-                const invalidLabel = missingSet.has(id) || !product ? "없는 ID" : "노출 불가"
+                const invalidLabel =
+                  missingSet.has(id) || !product ? "없는 ID" : INELIGIBLE_LABEL[product.ineligible_reason ?? "unknown"]
                 return (
                   <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-2 border-destructive ring-2 ring-destructive/25")}>
                     <div className="relative aspect-[3/4] bg-muted">

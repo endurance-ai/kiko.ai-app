@@ -16,6 +16,10 @@ export type CurationSection = {
   shown: number
 }
 
+// ai-server `/admin/curation/products` 가 `eligible` 과 같은 술어에서 계산해 준다.
+// 여기서 in_stock/price 로 추론하지 않는다 — 노출 조건은 서버가 단일 소스다.
+export type IneligibleReason = "out_of_stock" | "no_image" | "price_too_low" | "gender_mismatch"
+
 export type CurationProduct = {
   product_id: number
   brand: string
@@ -24,4 +28,5 @@ export type CurationProduct = {
   image_url: string
   in_stock: boolean
   eligible: boolean
+  ineligible_reason: IneligibleReason | null
 }
