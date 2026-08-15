@@ -11,12 +11,19 @@ describe("curation editor helpers", () => {
     expect(parseProductIds("713929, 673348\n713929 / 672995")).toEqual([713929, 673348, 672995])
   })
 
-  it("appends only new ids and reports the 20 item overflow", () => {
+  it("appends only new ids and reports the overflow past the limit", () => {
     const current = Array.from({length: 18}, (_, i) => i + 1)
-    const result = appendProductIds(current, [18, 19, 20, 21, 22])
+    const result = appendProductIds(current, [18, 19, 20, 21, 22], 20)
     expect(result.ids).toEqual(Array.from({length: 20}, (_, i) => i + 1))
     expect(result.duplicateCount).toBe(1)
     expect(result.overflowCount).toBe(2)
+  })
+
+  it("accepts more than 20 ids at the default limit", () => {
+    const incoming = Array.from({length: 84}, (_, i) => i + 1)
+    const result = appendProductIds([], incoming)
+    expect(result.ids).toHaveLength(84)
+    expect(result.overflowCount).toBe(0)
   })
 
   it("moves a product without changing the remaining order", () => {

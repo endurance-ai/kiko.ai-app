@@ -61,7 +61,6 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [productMap, setProductMap] = useState<Map<number, CurationProduct>>(new Map())
   const [missingIds, setMissingIds] = useState<number[]>([])
-  const [overflowOriginal, setOverflowOriginal] = useState(0)
   const [batchText, setBatchText] = useState("")
   const [query, setQuery] = useState("")
   const [searchPage, setSearchPage] = useState(0)
@@ -108,16 +107,9 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
         const section = (data.sections as CurationSection[]).find((item) => item.section_id === sectionId)
         if (!section) throw new Error("구좌를 찾을 수 없습니다.")
         if (cancelled) return
-        const ids = section.slot_type === "editorial"
-          ? section.product_ids.slice(0, MAX_CURATION_PRODUCTS)
-          : section.product_ids
+        const ids = section.product_ids
         setDraft(section)
         setSelectedIds(ids)
-        setOverflowOriginal(
-          section.slot_type === "editorial"
-            ? Math.max(0, section.product_ids.length - MAX_CURATION_PRODUCTS)
-            : 0
-        )
         if (section.slot_type === "editorial") await verifyProducts(ids, gender)
         if (!cancelled) setDirty(false)
       } catch (err) {
@@ -186,7 +178,9 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
     setBatchText("")
     const notices: string[] = []
     if (result.duplicateCount) notices.push(`중복 ${result.duplicateCount}개 제외`)
-    if (result.overflowCount) notices.push(`최대 20개를 넘어 ${result.overflowCount}개 제외`)
+    if (result.overflowCount) {
+      notices.push(`최대 ${MAX_CURATION_PRODUCTS}개를 넘어 ${result.overflowCount}개 제외`)
+    }
     setMessage(notices.length ? notices.join(" · ") : `${result.ids.length}개 상품을 선택했습니다.`)
     try {
       await verifyProducts(result.ids, draft.gender)
@@ -217,12 +211,6 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
       setMessage(`상품은 최대 ${MAX_CURATION_PRODUCTS}개까지 등록할 수 있습니다.`)
       return
     }
-    if (
-      overflowOriginal > 0 &&
-      !window.confirm(
-        `기존 상품 ${overflowOriginal}개가 20개 제한을 초과합니다. 저장하면 초과 상품은 목록에서 제거됩니다. 계속할까요?`
-      )
-    ) return
 
     setBusy("save")
     setMessage(null)
@@ -297,7 +285,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
             <ArrowLeft className="size-4" /> 구좌 목록
           </Link>
           <h1 className="text-xl font-semibold">{isNew ? "새 큐레이션 구좌" : `${sectionId} 편집`}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">상품 이미지를 확인하면서 최대 20개를 선택하고 노출 순서를 정할 수 있습니다.</p>
+          <p className="mt-1 text-sm text-muted-foreground">상품 이미지를 확인하면서 선택하고 노출 순서를 정할 수 있습니다. 선택한 상품은 앱에 전부 노출됩니다.</p>
         </div>
         <div className="ml-auto flex gap-2">
           {!isNew && (
@@ -316,12 +304,6 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
           <span>{message}</span>
           <button className="ml-auto" onClick={() => setMessage(null)} aria-label="메시지 닫기"><X className="size-4" /></button>
-        </div>
-      )}
-
-      {overflowOriginal > 0 && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm text-amber-700">
-          기존 등록 상품이 20개를 초과해 앞의 20개만 표시됩니다. 저장할 때 초과한 {overflowOriginal}개가 제거됩니다.
         </div>
       )}
 

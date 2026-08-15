@@ -1,4 +1,7 @@
-export const MAX_CURATION_PRODUCTS = 20
+// ai-server `SectionPayload.product_ids` 의 max_length 와 같은 값. 넘기면 거기서
+// 422 가 나므로 화면에서 먼저 막는다. 예전 값 20 은 서버가 앞 20개만 노출하던
+// 시절의 것으로, 지금은 넣은 만큼 전부 나간다 (ai-server#193).
+export const MAX_CURATION_PRODUCTS = 200
 export const CURATION_WARNING_MIN = 12
 
 export function parseProductIds(text: string): number[] {
