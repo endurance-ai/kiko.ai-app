@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       .split(/[^0-9]+/)
       .filter(Boolean)
       .map(Number)
-      .slice(0, 200)
+      .slice(0, MAX_CURATION_PRODUCTS)
     if (ids.length === 0) return NextResponse.json({products: [], missing: []})
     const result = await lookupProducts(gender, ids)
     if (isAiError(result)) return NextResponse.json({error: result.error}, {status: 502})
