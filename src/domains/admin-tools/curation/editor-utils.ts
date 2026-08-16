@@ -2,7 +2,7 @@
 // 422 가 나므로 화면에서 먼저 막는다. 예전 값 20 은 서버가 앞 20개만 노출하던
 // 시절의 것으로, 지금은 넣은 만큼 전부 나간다 (ai-server#193).
 export const MAX_CURATION_PRODUCTS = 200
-export const CURATION_WARNING_MIN = 12
+export const CURATION_WARNING_MIN = 30
 
 export function parseProductIds(text: string): number[] {
   return [...new Set((text.match(/\d+/g) ?? []).map(Number).filter(Number.isSafeInteger))]
@@ -32,14 +32,6 @@ export function appendProductIds(
     duplicateCount,
     overflowCount: Math.max(0, additions.length - capacity),
   }
-}
-
-export function moveProductId(ids: number[], from: number, to: number): number[] {
-  if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return ids
-  const next = [...ids]
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved)
-  return next
 }
 
 export function getEditorialActivationBlocker(

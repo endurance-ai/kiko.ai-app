@@ -8,7 +8,7 @@ import {AlertTriangle, Loader2, Plus, RefreshCw} from "lucide-react"
 import {cn} from "@/lib/utils"
 import type {CurationProduct, CurationSection, Gender} from "@/domains/admin-tools/curation/types"
 
-const SECTION_SIZE = 12
+const SECTION_SIZE = 30
 
 export default function CurationAdminPage() {
   const router = useRouter()

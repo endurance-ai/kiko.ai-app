@@ -1,6 +1,6 @@
 "use client"
 
-import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {useRouter} from "next/navigation"
@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  GripVertical,
   Loader2,
   Plus,
   Save,
@@ -24,7 +23,6 @@ import {
   CURATION_WARNING_MIN,
   getEditorialActivationBlocker,
   MAX_CURATION_PRODUCTS,
-  moveProductId,
   parseProductIds,
 } from "@/domains/admin-tools/curation/editor-utils"
 
@@ -81,7 +79,6 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
   const [busy, setBusy] = useState<"save" | "delete" | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
-  const dragIndex = useRef<number | null>(null)
 
   const verifyProducts = useCallback(async (ids: number[], targetGender: Gender) => {
     if (ids.length === 0) {
@@ -208,8 +205,6 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
 
   const removeId = (id: number) => removeIds([id])
 
-  const reorder = (from: number, to: number) => setIds(moveProductId(selectedIds, from, to))
-
   const save = async () => {
     const normalizedId = draft.section_id.trim()
     if (!/^[a-z0-9][a-z0-9-]*$/.test(normalizedId)) {
@@ -301,7 +296,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
             <ArrowLeft className="size-4" /> 구좌 목록
           </Link>
           <h1 className="text-xl font-semibold">{isNew ? "새 큐레이션 구좌" : `${sectionId} 편집`}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">상품 이미지를 확인하면서 선택하고 노출 순서를 정할 수 있습니다. 선택한 상품은 앱에 전부 노출됩니다.</p>
+          <p className="mt-1 text-sm text-muted-foreground">상품 이미지를 확인하면서 선택할 수 있습니다. 선택한 상품은 앱에 전부 노출되며 순서는 요청마다 무작위로 바뀝니다.</p>
         </div>
         <div className="ml-auto flex gap-2">
           {!isNew && (
@@ -346,7 +341,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
           </Field>
           <Field label="제목"><input value={draft.title} onChange={(event) => updateDraft({title: event.target.value})} className={CONTROL_CLASS} /></Field>
           <Field label="서브타이틀"><input value={draft.subtitle ?? ""} onChange={(event) => updateDraft({subtitle: event.target.value})} className={CONTROL_CLASS} /></Field>
-          <Field label="노출 순서"><input type="number" min={0} max={9999} value={draft.sort_order} onChange={(event) => updateDraft({sort_order: Number(event.target.value)})} className={CONTROL_CLASS} /></Field>
+          <Field label="구좌 노출 순서"><input type="number" min={0} max={9999} value={draft.sort_order} onChange={(event) => updateDraft({sort_order: Number(event.target.value)})} className={CONTROL_CLASS} /></Field>
           <Field label="상태">
             <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm"><input type="checkbox" checked={draft.is_active} onChange={(event) => updateDraft({is_active: event.target.checked})} /> 모바일에 노출</label>
           </Field>
@@ -399,7 +394,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
           </section>
 
           <section className="flex min-w-0 flex-col gap-4 rounded-lg border bg-background p-4">
-            <div className="flex items-start gap-2"><div><h2 className="font-medium">선택 상품 <span className="tabular-nums">{selectedIds.length}개</span></h2><p className="mt-1 text-xs text-muted-foreground">카드를 드래그하거나 화살표를 눌러 모바일 노출 순서를 바꿉니다.</p></div>{selectedIds.length > 0 && selectedIds.length < CURATION_WARNING_MIN && <span className="ml-auto rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-700">12개 미만</span>}</div>
+            <div className="flex items-start gap-2"><div><h2 className="font-medium">선택 상품 <span className="tabular-nums">{selectedIds.length}개</span></h2><p className="mt-1 text-xs text-muted-foreground">저장 순서와 관계없이 API가 요청마다 상품 순서를 섞습니다.</p></div>{selectedIds.length > 0 && selectedIds.length < CURATION_WARNING_MIN && <span className="ml-auto rounded-full bg-amber-500/10 px-2 py-1 text-xs text-amber-700">{CURATION_WARNING_MIN}개 미만</span>}</div>
             <div className="flex gap-2"><textarea value={batchText} onChange={(event) => setBatchText(event.target.value)} rows={2} placeholder="상품 ID 여러 개 붙여넣기 (쉼표, 공백, 줄바꿈 구분)" className={cn(CONTROL_CLASS, "min-h-16 resize-none font-mono text-xs")} /><button onClick={() => void addIds(parseProductIds(batchText))} disabled={!batchText.trim()} className="shrink-0 rounded-md border px-3 text-sm disabled:opacity-50">추가</button></div>
             {invalidIds.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
@@ -420,16 +415,14 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
                 const invalidLabel =
                   missingSet.has(id) || !product ? "없는 ID" : INELIGIBLE_LABEL[product.ineligible_reason ?? "unknown"]
                 return (
-                  <article key={id} draggable onDragStart={() => {dragIndex.current = index}} onDragOver={(event) => event.preventDefault()} onDrop={() => {if (dragIndex.current != null) reorder(dragIndex.current, index); dragIndex.current = null}} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-2 border-destructive ring-2 ring-destructive/25")}>
+                  <article key={id} className={cn("group overflow-hidden rounded-lg border bg-background", invalid && "border-2 border-destructive ring-2 ring-destructive/25")}>
                     <div className="relative aspect-[3/4] bg-muted">
                       <ProductImage src={product?.image_url ?? null} alt={product?.name ?? `상품 ${id}`} missingLabel="상품 정보를 찾을 수 없음" eager={index < 4} />
-                      <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-xs font-semibold shadow">{index + 1}</span>
                       {/* right-11 — 우하단 제거 버튼과 겹치지 않게 */}
                       {invalid && <span className="absolute bottom-2 left-2 right-11 truncate rounded bg-destructive px-1.5 py-0.5 text-center text-xs font-semibold text-destructive-foreground shadow">{invalidLabel}</span>}
-                      <GripVertical className="absolute right-2 top-2 size-5 cursor-grab rounded bg-background/90 p-0.5" />
                       <button onClick={() => removeId(id)} className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-background shadow" aria-label="상품 제거"><X className="size-4" /></button>
                     </div>
-                    <div className="p-2 text-xs"><div className="truncate font-medium">{product?.brand || `상품 ${id}`}</div><div className="line-clamp-2 min-h-8 text-muted-foreground">{product?.name || "존재하지 않는 ID"}</div><div className="mt-1 flex items-center justify-between"><span className="font-mono text-muted-foreground">{id}</span><span className="flex gap-1"><button disabled={index === 0} onClick={() => reorder(index, index - 1)} className="rounded border p-0.5 disabled:opacity-30"><ChevronLeft className="size-3" /></button><button disabled={index === selectedIds.length - 1} onClick={() => reorder(index, index + 1)} className="rounded border p-0.5 disabled:opacity-30"><ChevronRight className="size-3" /></button></span></div></div>
+                    <div className="p-2 text-xs"><div className="truncate font-medium">{product?.brand || `상품 ${id}`}</div><div className="line-clamp-2 min-h-8 text-muted-foreground">{product?.name || "존재하지 않는 ID"}</div><div className="mt-1 font-mono text-muted-foreground">{id}</div></div>
                   </article>
                 )
               })}

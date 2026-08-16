@@ -2,7 +2,6 @@ import {describe, expect, it} from "vitest"
 import {
   appendProductIds,
   getEditorialActivationBlocker,
-  moveProductId,
   parseProductIds,
 } from "./editor-utils"
 
@@ -24,11 +23,6 @@ describe("curation editor helpers", () => {
     const result = appendProductIds([], incoming)
     expect(result.ids).toHaveLength(84)
     expect(result.overflowCount).toBe(0)
-  })
-
-  it("moves a product without changing the remaining order", () => {
-    expect(moveProductId([10, 20, 30, 40], 3, 1)).toEqual([10, 40, 20, 30])
-    expect(moveProductId([10, 20], -1, 0)).toEqual([10, 20])
   })
 
   it("blocks activation when a product is missing or ineligible", () => {
