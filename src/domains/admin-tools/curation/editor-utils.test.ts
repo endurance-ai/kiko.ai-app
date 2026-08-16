@@ -2,10 +2,26 @@ import {describe, expect, it} from "vitest"
 import {
   appendProductIds,
   getEditorialActivationBlocker,
+  moveCurationSection,
   parseProductIds,
 } from "./editor-utils"
 
 describe("curation editor helpers", () => {
+  it("moves a section and normalizes the saved order", () => {
+    const sections = [
+      {section_id: "first", sort_order: 10},
+      {section_id: "second", sort_order: 20},
+      {section_id: "third", sort_order: 30},
+    ]
+
+    expect(moveCurationSection(sections, "third", "first")).toEqual([
+      {section_id: "third", sort_order: 1},
+      {section_id: "first", sort_order: 2},
+      {section_id: "second", sort_order: 3},
+    ])
+    expect(sections[0].sort_order).toBe(10)
+  })
+
   it("parses mixed separators, keeps order, and removes duplicates", () => {
     expect(parseProductIds("713929, 673348\n713929 / 672995")).toEqual([713929, 673348, 672995])
   })

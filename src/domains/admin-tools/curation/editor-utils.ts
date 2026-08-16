@@ -4,6 +4,21 @@
 export const MAX_CURATION_PRODUCTS = 200
 export const CURATION_WARNING_MIN = 30
 
+export function moveCurationSection<T extends {section_id: string; sort_order: number}>(
+  sections: T[],
+  sourceId: string,
+  targetId: string
+): T[] {
+  const sourceIndex = sections.findIndex((section) => section.section_id === sourceId)
+  const targetIndex = sections.findIndex((section) => section.section_id === targetId)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return sections
+
+  const reordered = [...sections]
+  const [moved] = reordered.splice(sourceIndex, 1)
+  reordered.splice(targetIndex, 0, moved)
+  return reordered.map((section, index) => ({...section, sort_order: index + 1}))
+}
+
 export function parseProductIds(text: string): number[] {
   return [...new Set((text.match(/\d+/g) ?? []).map(Number).filter(Number.isSafeInteger))]
 }

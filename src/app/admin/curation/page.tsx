@@ -1,12 +1,13 @@
 "use client"
 
-import {useCallback, useEffect, useMemo, useState} from "react"
+import {type DragEvent, useCallback, useEffect, useMemo, useState} from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {useRouter, useSearchParams} from "next/navigation"
-import {AlertTriangle, Loader2, Plus, RefreshCw} from "lucide-react"
+import {AlertTriangle, GripVertical, Loader2, Plus, RefreshCw} from "lucide-react"
 import {cn} from "@/lib/utils"
 import type {CurationProduct, CurationSection, Gender} from "@/domains/admin-tools/curation/types"
+import {moveCurationSection} from "@/domains/admin-tools/curation/editor-utils"
 
 const SECTION_SIZE = 30
 
@@ -17,6 +18,9 @@ export default function CurationAdminPage() {
   const [sections, setSections] = useState<CurationSection[]>([])
   const [previews, setPreviews] = useState<Map<number, CurationProduct>>(new Map())
   const [loading, setLoading] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null)
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -68,13 +72,48 @@ export default function CurationAdminPage() {
 
   const changeGender = (next: Gender) => router.replace(`/admin/curation?gender=${next}`)
 
+  const dropSection = async (event: DragEvent<HTMLTableRowElement>, targetId: string) => {
+    event.preventDefault()
+    const sourceId = draggedSectionId
+    setDraggedSectionId(null)
+    setDragOverSectionId(null)
+    if (!sourceId || sourceId === targetId || savingOrder) return
+
+    const previous = sections
+    const reordered = moveCurationSection(previous, sourceId, targetId)
+    if (reordered === previous) return
+
+    setSections(reordered)
+    setSavingOrder(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/admin/curation-sections", {
+        method: "PATCH",
+        headers: {"content-type": "application/json"},
+        body: JSON.stringify({
+          gender,
+          section_ids: reordered.map((section) => section.section_id),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`)
+      await load()
+    } catch (err) {
+      setSections(previous)
+      await load()
+      setError(`순서 저장 실패: ${(err as Error).message}`)
+    } finally {
+      setSavingOrder(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5 p-6">
       <header className="flex flex-wrap items-start gap-3">
         <div>
           <h1 className="text-xl font-semibold">큐레이션 구좌</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            구좌별 대표 상품과 실제 노출 수를 확인하고, 전용 화면에서 상품을 편집합니다.
+            순서 핸들을 드래그해 노출 순서를 바꾸고, 전용 화면에서 구좌 정보를 편집합니다.
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -92,6 +131,11 @@ export default function CurationAdminPage() {
               </button>
             ))}
           </div>
+          {savingOrder && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />순서 저장 중
+            </span>
+          )}
           <button
             onClick={() => void load()}
             className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm hover:bg-muted"
@@ -155,9 +199,45 @@ export default function CurationAdminPage() {
               return (
                 <tr
                   key={`${section.section_id}:${section.gender}`}
-                  className={cn("border-t", !section.is_active && "bg-muted/20 text-muted-foreground")}
+                  onDragOver={(event) => {
+                    if (!draggedSectionId || savingOrder) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = "move"
+                    setDragOverSectionId(section.section_id)
+                  }}
+                  onDrop={(event) => void dropSection(event, section.section_id)}
+                  className={cn(
+                    "border-t transition-colors",
+                    !section.is_active && "bg-muted/20 text-muted-foreground",
+                    dragOverSectionId === section.section_id &&
+                      draggedSectionId !== section.section_id &&
+                      "bg-blue-500/10"
+                  )}
                 >
-                  <td className="px-3 py-3 text-right tabular-nums">{section.sort_order}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        draggable={!savingOrder}
+                        onDragStart={(event) => {
+                          setDraggedSectionId(section.section_id)
+                          event.dataTransfer.effectAllowed = "move"
+                          event.dataTransfer.setData("text/plain", section.section_id)
+                        }}
+                        onDragEnd={() => {
+                          setDraggedSectionId(null)
+                          setDragOverSectionId(null)
+                        }}
+                        disabled={savingOrder}
+                        title="드래그해서 구좌 순서 변경"
+                        aria-label={`${section.title} 순서 변경`}
+                        className="cursor-grab rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed"
+                      >
+                        <GripVertical className="size-4" />
+                      </button>
+                      <span className="min-w-5 text-right tabular-nums">{section.sort_order}</span>
+                    </div>
+                  </td>
                   <td className="px-3 py-3 font-mono text-xs">{section.section_id}</td>
                   <td className="px-3 py-3">{section.slot_type}</td>
                   <td className="px-3 py-3">

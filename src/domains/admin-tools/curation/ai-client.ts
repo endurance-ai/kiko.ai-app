@@ -78,8 +78,8 @@ async function callAi<T>(
     if (!res.ok) {
       const text = await res.text().catch(() => "")
       logger.warn(`[curation-admin] ${path} HTTP ${res.status}: ${text.slice(0, 500)}`)
-      // 422 는 입력 오류라 운영자에게 이유를 보여줘야 고칠 수 있다.
-      if (res.status === 422) {
+      // 409/422 는 운영자가 다시 불러오거나 입력을 고칠 수 있게 이유를 보여준다.
+      if (res.status === 409 || res.status === 422) {
         return {ok: false, error: text.slice(0, 300) || "입력값이 올바르지 않습니다"}
       }
       return {ok: false, error: `upstream HTTP ${res.status}`}
@@ -110,6 +110,16 @@ export function lookupProducts(
 
 export function saveSection(payload: Omit<SectionRow, "live_count">): Promise<SectionRow | AiError> {
   return callAi<SectionRow>("/admin/curation/sections", {method: "PUT", body: payload})
+}
+
+export function reorderSections(
+  gender: Gender,
+  sectionIds: string[]
+): Promise<{updated: number} | AiError> {
+  return callAi("/admin/curation/sections/order", {
+    method: "PATCH",
+    body: {gender, section_ids: sectionIds},
+  })
 }
 
 export function deleteSection(

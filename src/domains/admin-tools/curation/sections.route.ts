@@ -8,6 +8,7 @@ import {
   listSections,
   lookupProducts,
   previewFeed,
+  reorderSections,
   saveSection,
 } from "./ai-client"
 import {getEditorialActivationBlocker, MAX_CURATION_PRODUCTS} from "./editor-utils"
@@ -95,6 +96,30 @@ export async function PUT(req: NextRequest) {
   }
 
   const result = await saveSection(body as Parameters<typeof saveSection>[0])
+  if (isAiError(result)) return NextResponse.json({error: result.error}, {status: 502})
+  return NextResponse.json(result)
+}
+
+export async function PATCH(req: NextRequest) {
+  const denied = await gate()
+  if (denied) return denied
+
+  const body = await req.json().catch(() => null) as Record<string, unknown> | null
+  const gender = body?.gender === "women" || body?.gender === "men" ? body.gender : null
+  const rawSectionIds = body?.section_ids
+  const sectionIds = Array.isArray(rawSectionIds)
+    ? rawSectionIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : []
+  if (
+    !gender ||
+    !Array.isArray(rawSectionIds) ||
+    sectionIds.length === 0 ||
+    sectionIds.length !== rawSectionIds.length
+  ) {
+    return NextResponse.json({error: "gender and section_ids are required"}, {status: 400})
+  }
+
+  const result = await reorderSections(gender, sectionIds)
   if (isAiError(result)) return NextResponse.json({error: result.error}, {status: 502})
   return NextResponse.json(result)
 }
