@@ -300,6 +300,7 @@ stack-internal 아키텍처 재설계. **언어·동작·화면 불변**, 레이
 
 | 날짜 | 사건 |
 |---|---|
+| 2026-08-16 | **대표 이미지 SOT + 깨진 URL 격리** — migration 110에서 `products.image_url`을 serving/search/embedding 단일 출처로 고정했다. 대표 변경은 DB 트리거로 `product_embeddings`/`product_features`를 자동 무효화한다. `product_image_failures`와 원자적 repair RPC가 404/410 URL을 모든 이미지 필드에서 제거·대체하고 일시 오류에는 backoff를 적용한다. |
 | 2026-08-06 | **브랜드 description 일반 컬럼 분리** — migration 105: `brand_nodes.description text` 추가, 기존 `wiki.description_ko` 우선·`wiki.description_original` 폴백 backfill 후 두 JSON 키 제거. 브랜드 상세 API/UI와 Wiki 편집 API가 일반 컬럼을 직접 조회·수정하도록 전환. |
 | 2026-08-02 | **상품 전체 이미지 보존 + 안전한 대표 이미지 갱신** — migration 102에서 `products.images` 및 `apply_product_image_selections`의 10장 제한을 제거했다. Apple Vision 대표 이미지가 실제로 바뀐 상품은 기존 `product_embeddings`/`product_features` 행을 삭제해 기존 pending 배치가 새 이미지 기준으로 재생성하도록 한다. Apple Vision 선택은 macOS 로컬 수동 작업으로 유지한다. |
 | 2026-05-21 | **brand wiki (feature/admin-wiki, SPEC-BRAND-WIKI-001)** — migration 084: `brand_nodes.wiki jsonb` 신규 컬럼 + 인덱스 3종 (country/ig_handle/status). 신규 API `PATCH /api/admin/brand-nodes/[id]/wiki` (wiki merge-update, requireApprovedAdmin 게이트, 입력 검증 ALLOWED_KEYS + URL http/https 체크). `GET /api/admin/brand-graph/detail` 응답 확장: `brand.wiki` 필드 + `similar[].primary_style_node_id` + `nodes_by_id` (유사 브랜드 노드 배지). `GET /api/admin/brand-nodes` 필터 확장: `?wiki=all|with|without`. 어드민 brand-node-detail drawer — WikiSection(view) + WikiEditor(edit) + 드래그 리사이즈 핸들(localStorage 유지). |
