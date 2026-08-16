@@ -351,7 +351,7 @@ export function CurationEditor({gender, sectionId}: {gender: Gender; sectionId?:
       {isAuto ? (
         <section className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
           <h2 className="font-medium">자동 선정 구좌</h2>
-          <p className="mt-1 text-sm text-muted-foreground">상품은 매일 서버에서 자동 계산되므로 여기서는 구좌 정보만 수정할 수 있습니다. 현재 노출 가능 {draft.live_count}개, 실제 노출 {draft.shown}개입니다.</p>
+          <p className="mt-1 text-sm text-muted-foreground">상품은 일일 배치 또는 사용자별 조건에 따라 서버에서 자동 계산되므로 여기서는 구좌 정보만 수정할 수 있습니다. 저장된 공용 상품 기준 노출 가능 {draft.live_count}개, 실제 노출 {draft.shown}개입니다.</p>
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(500px,1fr)]">
