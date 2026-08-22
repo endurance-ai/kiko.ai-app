@@ -74,7 +74,7 @@ export async function GET(
       featureMetadata,
       tags: product.tags,
       sizeInfo: product.size_info,
-      createdAt: product.created_at,
+      firstSeenAt: product.first_seen_at,
       styleNode,
       hasEmbedding: !!embRes.data,
       embeddedAt: (embRes.data as {embedded_at?: string} | null)?.embedded_at ?? null,

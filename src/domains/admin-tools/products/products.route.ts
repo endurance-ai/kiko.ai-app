@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   const reviewStatus = searchParams.get("reviewStatus") || "all"
   const sort = searchParams.get("sort") || "newest"
 
-  let orderCol = "created_at"
+  let orderCol = "first_seen_at"
   let orderAsc = false
   switch (sort) {
     case "price_asc": orderCol = "price"; orderAsc = true; break
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
   }
 
   const productColumns =
-    "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count"
+    "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, first_seen_at, review_count"
   const productsTable = supabase.from("products")
   let query = isCurationMode
     ? productsTable.select(productColumns)
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
     id: number; brand: string; brand_node_id: number | null; name: string;
     price: number | null; source_currency: string | null; source_price: number | null;
     image_url: string | null; platform: string; category: string | null;
-    in_stock: boolean; gender: string[] | null; created_at: string;
+    in_stock: boolean; gender: string[] | null; first_seen_at: string;
     review_count: number | null;
   }
 
