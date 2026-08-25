@@ -48,6 +48,10 @@ export async function GET(request: NextRequest) {
     isCurationMode && genders.length === 1 && genders[0] !== "unisex"
       ? [genders[0], "unisex"]
       : genders
+  const priceMinRaw = parseInt(searchParams.get("priceMin") || "", 10)
+  const priceMin = Number.isNaN(priceMinRaw) || priceMinRaw < 0 ? null : priceMinRaw
+  const priceMaxRaw = parseInt(searchParams.get("priceMax") || "", 10)
+  const priceMax = Number.isNaN(priceMaxRaw) || priceMaxRaw < 0 ? null : priceMaxRaw
   const embeddingStatus = searchParams.get("embeddingStatus") || "all" // all | embedded | no_embedding
   const stockStatus = searchParams.get("stockStatus") || "all"
   // 2026-07-29: products.description 제거 → "상세 유무" 필터가 의미를 잃었다.
@@ -122,6 +126,8 @@ export async function GET(request: NextRequest) {
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
   if (effectiveGenders.length > 0) query = query.overlaps("gender", effectiveGenders)
+  if (priceMin != null) query = query.gte("price", priceMin)
+  if (priceMax != null) query = query.lte("price", priceMax)
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
   else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 

@@ -13,10 +13,12 @@
     "seed:eval": "dotenv -e .env.local -- tsx scripts/seed-eval-golden-queries.ts"
   },
   "dependencies": {
+    "@amplitude/analytics-browser": "^2.45.6",
     "@base-ui/react": "^1.3.0",
     "@supabase/supabase-js": "^2.100.1",
     "@vercel/analytics": "^2.0.1",
     "bcryptjs": "^3.0.3",
+    "border-beam": "^1.3.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",
