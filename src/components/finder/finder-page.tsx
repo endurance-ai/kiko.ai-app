@@ -3,27 +3,27 @@
 import {useCallback, useEffect, useMemo, useState} from "react"
 import {useRouter, useSearchParams} from "next/navigation"
 import Image from "next/image"
-import Link from "next/link"
-import {Check, ChevronLeft, ChevronRight, Copy, Loader2, RotateCcw, Search, X} from "lucide-react"
+import {ChevronLeft, ChevronRight, Loader2, RotateCcw, Search, X} from "lucide-react"
 import {Button} from "@/components/ui/button"
-import type {FilterOptionsResponse} from "@/app/api/admin/products/filter-options/route"
+import type {FinderFilterOptionsResponse} from "@/app/api/finder/products/filter-options/route"
 import {formatProductPrice} from "@/lib/format-product-price"
+
+// 공개 크리에이터용 상품 탐색 페이지 — 어드민 "상품 DB"(src/components/admin/products-page.tsx)
+// 를 읽기 전용으로 축소 복제한 것. 원본 대비:
+//   - 제거: 임베딩/VLM/플랫폼/리뷰/재고 필터 UI, 카드의 PID/BID/EMB 표시, 내부 상세 링크
+//   - 고정: 판매중(in_stock=true) 상품만 (서버에서 항상 필터링, UI 토글 없음)
+//   - 추가: 스타일(트렌드) 더미 필터(맨 앞), 카드 클릭 시 외부 자사몰(product_url)로 새 탭 이동
 
 type Product = {
   id: string
   brand: string
-  brandNodeId: number | null
   name: string
   price: number | null
   sourceCurrency: string | null
   sourcePrice: number | null
   imageUrl: string | null
-  platform: string
   category: string | null
-  inStock: boolean
-  hasFeatures: boolean
-  reviewCount: number
-  hasEmbedding: boolean
+  productUrl: string | null
   styleNode: {code: string; name_en: string} | null
 }
 
@@ -69,132 +69,84 @@ function OptionList({
 
 function ProductCard({p}: {p: Product}) {
   const [imgError, setImgError] = useState(false)
-  const [copiedPid, setCopiedPid] = useState(false)
-  const [copiedBid, setCopiedBid] = useState(false)
   const tags = [p.category, p.styleNode?.code].filter(Boolean)
-  // 현재 목록 필터를 상세 URL 에 ret 로 실어보냄 → 상세 "상품 목록" 이 그대로 복원.
-  const searchParams = useSearchParams()
-  const ret = searchParams.toString()
-  const detailHref = ret
-    ? `/admin/products/${p.id}?ret=${encodeURIComponent(ret)}`
-    : `/admin/products/${p.id}`
 
-  const handleCopyPid = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    navigator.clipboard.writeText(String(p.id))
-    setCopiedPid(true)
-    setTimeout(() => setCopiedPid(false), 1000)
-  }
+  const cardBody = (
+    <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
+      {/* Image */}
+      <div className="aspect-[3/4] relative bg-muted">
+        {p.imageUrl && !imgError ? (
+          <Image
+            src={p.imageUrl}
+            alt={p.name}
+            fill
+            sizes="(min-width: 1280px) 16vw, (min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw"
+            className="object-cover"
+            unoptimized
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[10px] text-muted-foreground">No Image</span>
+          </div>
+        )}
+      </div>
+      {/* Info */}
+      <div className="p-2 space-y-0.5">
+        <p className="text-[10px] text-muted-foreground truncate">{p.brand}</p>
+        <p className="text-xs font-medium truncate">{p.name}</p>
+        <p className="text-xs tabular-nums">
+          {formatProductPrice({
+            sourcePrice: p.sourcePrice,
+            sourceCurrency: p.sourceCurrency,
+            krwPrice: p.price,
+          })}
+        </p>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {tags.map((t) => (
+              <span
+                key={t as string}
+                className="text-[9px] px-1.5 py-0.5 rounded bg-foreground/5 text-muted-foreground"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </article>
+  )
 
-  const handleCopyBid = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    navigator.clipboard.writeText(String(p.brandNodeId))
-    setCopiedBid(true)
-    setTimeout(() => setCopiedBid(false), 1000)
+  // product_url 없는 상품은 클릭 비활성 — 링크 없이 카드만 표시 (깨지지 않게).
+  if (!p.productUrl) {
+    return (
+      <div className="block cursor-default opacity-90" aria-disabled="true">
+        {cardBody}
+      </div>
+    )
   }
 
   return (
-    <Link href={detailHref} className="group block" target="_blank" rel="noopener">
-      <article className="border border-border rounded-md overflow-hidden hover:border-foreground/40 transition-colors bg-card">
-        {/* Image */}
-        <div className="aspect-[3/4] relative bg-muted">
-          {p.imageUrl && !imgError ? (
-            <Image
-              src={p.imageUrl}
-              alt={p.name}
-              fill
-              sizes="(min-width: 1280px) 16vw, (min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw"
-              className="object-cover"
-              unoptimized
-              loading="lazy"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-[10px] text-muted-foreground">No Image</span>
-            </div>
-          )}
-          {/* Embedding badge */}
-          <div className="absolute top-1.5 right-1.5">
-            <span
-              className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
-                p.hasEmbedding
-                  ? "bg-turquoise/20 text-turquoise"
-                  : "bg-orange-400/15 text-orange-400"
-              }`}
-            >
-              {p.hasEmbedding ? "EMB" : "—"}
-            </span>
-          </div>
-        </div>
-        {/* Info */}
-        <div className="p-2 space-y-0.5">
-          <p className="text-[10px] text-muted-foreground truncate">{p.brand}</p>
-          <p className="text-xs font-medium truncate">{p.name}</p>
-          <p className="text-xs tabular-nums">
-            {formatProductPrice({
-              sourcePrice: p.sourcePrice,
-              sourceCurrency: p.sourceCurrency,
-              krwPrice: p.price,
-            })}
-          </p>
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {tags.map((t) => (
-                <span
-                  key={t as string}
-                  className="text-[9px] px-1.5 py-0.5 rounded bg-foreground/5 text-muted-foreground"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-          {/* ID row with copy buttons */}
-          <div className="flex items-center gap-2 pt-1 text-[10px] tabular-nums text-muted-foreground">
-            <div className="flex items-center gap-0.5">
-              <span>PID {p.id}</span>
-              <button
-                type="button"
-                onClick={handleCopyPid}
-                className="inline-flex items-center justify-center p-0.5 hover:text-foreground transition-colors"
-              >
-                {copiedPid ? <Check size={10} /> : <Copy size={10} />}
-              </button>
-            </div>
-            {p.brandNodeId != null && (
-              <div className="flex items-center gap-0.5">
-                <span>BID {p.brandNodeId}</span>
-                <button
-                  type="button"
-                  onClick={handleCopyBid}
-                  className="inline-flex items-center justify-center p-0.5 hover:text-foreground transition-colors"
-                >
-                  {copiedBid ? <Check size={10} /> : <Copy size={10} />}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </article>
-    </Link>
+    <a href={p.productUrl} target="_blank" rel="noopener noreferrer" className="group block">
+      {cardBody}
+    </a>
   )
 }
+
+// TODO: 트렌드 태깅 파이프라인 연동 전까지 더미 상수. 백엔드 준비되면
+// 옵션을 API(filter-options)에서 받아오도록 교체.
+const STYLE_TREND_OPTIONS = ["Y2K", "그런지", "미니멀", "시티보이", "올드머니", "발레코어", "클린걸", "고프코어"]
 
 interface FilterState {
   search: string
   category: string
   subcategory: string
-  platform: string
   gender: string
   styleNode: string
+  styleTrend: string
   price: string
-  embeddingStatus: string
-  stockStatus: string
-  featureStatus: string
-  reviewStatus: string
   sort: string
 }
 
@@ -202,14 +154,10 @@ const DEFAULTS: FilterState = {
   search: "",
   category: "",
   subcategory: "",
-  platform: "",
   gender: "",
   styleNode: "",
+  styleTrend: "",
   price: "",
-  embeddingStatus: "all",
-  stockStatus: "all",
-  featureStatus: "all",
-  reviewStatus: "all",
   sort: "newest",
 }
 
@@ -217,26 +165,14 @@ const CHIP_LABELS: Record<string, string> = {
   search: "검색",
   category: "카테고리",
   subcategory: "서브카테고리",
-  platform: "플랫폼",
   gender: "성별",
   styleNode: "노드",
+  styleTrend: "스타일",
   price: "가격",
-  embeddingStatus: "임베딩",
-  stockStatus: "재고",
-  featureStatus: "VLM",
-  reviewStatus: "리뷰",
   sort: "정렬",
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  embedded: "있음",
-  no_embedding: "없음",
-  in_stock: "판매중",
-  out_of_stock: "품절",
-  with_features: "있음",
-  no_features: "없음",
-  with_reviews: "있음",
-  no_reviews: "없음",
   price_desc: "가격↓",
   price_asc: "가격↑",
   brand_asc: "브랜드 A-Z",
@@ -249,7 +185,7 @@ const PRICE_LABELS: Record<string, string> = {
   "300000-": "30만~",
 }
 
-export default function ProductsPageInner() {
+export default function FinderPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -263,19 +199,15 @@ export default function ProductsPageInner() {
     search: searchParams.get("search") || "",
     category: searchParams.get("category") || "",
     subcategory: searchParams.get("subcategory") || "",
-    platform: searchParams.get("platform") || "",
     gender: searchParams.get("gender") || "",
     styleNode: searchParams.get("styleNode") || "",
+    styleTrend: searchParams.get("styleTrend") || "",
     price: searchParams.get("price") || "",
-    embeddingStatus: searchParams.get("embeddingStatus") || "all",
-    stockStatus: searchParams.get("stockStatus") || "all",
-    featureStatus: searchParams.get("featureStatus") || "all",
-    reviewStatus: searchParams.get("reviewStatus") || "all",
     sort: searchParams.get("sort") || "newest",
   }))
 
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
-  const [options, setOptions] = useState<FilterOptionsResponse | null>(null)
+  const [options, setOptions] = useState<FinderFilterOptionsResponse | null>(null)
   const [optionsError, setOptionsError] = useState<string | null>(null)
 
   const update = useCallback((patch: Partial<FilterState>) => {
@@ -287,13 +219,13 @@ export default function ProductsPageInner() {
     let cancelled = false
     async function loadOptions() {
       try {
-        const res = await fetch("/api/admin/products/filter-options")
+        const res = await fetch("/api/finder/products/filter-options")
         if (!res.ok) {
           const err = await res.json().catch(() => ({error: "failed"}))
           if (!cancelled) setOptionsError(err.error || "필터 옵션 로드 실패")
           return
         }
-        const data = (await res.json()) as FilterOptionsResponse
+        const data = (await res.json()) as FinderFilterOptionsResponse
         if (!cancelled) setOptions(data)
       } catch (e) {
         if (!cancelled) setOptionsError((e as Error).message)
@@ -319,10 +251,10 @@ export default function ProductsPageInner() {
       page: String(page),
     }
     for (const [k, v] of Object.entries(state)) {
-      if (v && v !== "all" && v !== "newest" && v !== "0") params.set(k, v)
+      if (v && v !== "newest" && v !== "0") params.set(k, v)
     }
     const qs = params.toString()
-    router.replace(`/admin/products${qs ? `?${qs}` : ""}`, {scroll: false})
+    router.replace(`/finder${qs ? `?${qs}` : ""}`, {scroll: false})
   }, [router, filters, debouncedSearch, page])
 
   const fetchProducts = useCallback(async () => {
@@ -333,19 +265,15 @@ export default function ProductsPageInner() {
         search: debouncedSearch,
         category: filters.category,
         subcategory: filters.subcategory,
-        platform: filters.platform,
         gender: filters.gender,
         styleNode: filters.styleNode,
-        embeddingStatus: filters.embeddingStatus,
-        stockStatus: filters.stockStatus,
-        featureStatus: filters.featureStatus,
-        reviewStatus: filters.reviewStatus,
         sort: filters.sort,
+        // TODO: 트렌드 태깅 파이프라인 연동 후 API 파라미터로 전달 (filters.styleTrend)
       })
       const [priceMin, priceMax] = filters.price.split("-")
       if (priceMin) params.set("priceMin", priceMin)
       if (priceMax) params.set("priceMax", priceMax)
-      const res = await fetch(`/api/admin/products?${params}`)
+      const res = await fetch(`/api/finder/products?${params}`)
       if (res.ok) {
         const data = await res.json()
         setProducts(data.products ?? [])
@@ -356,20 +284,15 @@ export default function ProductsPageInner() {
       setLoading(false)
     }
     // 검색어(filters.search)는 debouncedSearch 로만 트리거 — 타이핑마다 재fetch 방지.
-    // 따라서 filters 객체 전체가 아니라 검색 외 필터 필드만 의존성에 둔다.
+    // styleTrend 는 아직 API 미연동이라 의존성에서도 제외 (변경돼도 재fetch 불필요).
   }, [
     page,
     debouncedSearch,
     filters.category,
     filters.subcategory,
-    filters.platform,
     filters.gender,
     filters.styleNode,
     filters.price,
-    filters.embeddingStatus,
-    filters.stockStatus,
-    filters.featureStatus,
-    filters.reviewStatus,
     filters.sort,
   ])
 
@@ -381,6 +304,14 @@ export default function ProductsPageInner() {
     setFilters(DEFAULTS)
     setDebouncedSearch("")
     setPage(0)
+  }
+
+  const toggleStyleTrend = (val: string) => {
+    const selected = filters.styleTrend.split(",").filter(Boolean)
+    const active = selected.includes(val)
+    update({
+      styleTrend: (active ? selected.filter((v) => v !== val) : [...selected, val]).join(","),
+    })
   }
 
   const activeChips = useMemo(() => {
@@ -404,7 +335,6 @@ export default function ProductsPageInner() {
     }
     pushIfValue("category")
     pushIfValue("subcategory")
-    pushIfValue("platform")
     if (filters.gender) {
       const gLabel = filters.gender
         .split(",")
@@ -413,12 +343,15 @@ export default function ProductsPageInner() {
         .join(",")
       chips.push({key: "gender", label: `${CHIP_LABELS.gender}: ${gLabel}`, onClear: () => update({gender: ""})})
     }
+    if (filters.styleTrend) {
+      chips.push({
+        key: "styleTrend",
+        label: `${CHIP_LABELS.styleTrend}: ${filters.styleTrend.split(",").filter(Boolean).join(", ")}`,
+        onClear: () => update({styleTrend: ""}),
+      })
+    }
     pushIfValue("styleNode")
     pushIfValue("price", "", (v) => PRICE_LABELS[v] ?? v)
-    pushIfValue("embeddingStatus", "all", (v) => STATUS_LABELS[v] ?? v)
-    pushIfValue("stockStatus", "all", (v) => STATUS_LABELS[v] ?? v)
-    pushIfValue("featureStatus", "all", (v) => STATUS_LABELS[v] ?? v)
-    pushIfValue("reviewStatus", "all", (v) => STATUS_LABELS[v] ?? v)
     if (filters.sort !== "newest") {
       chips.push({
         key: "sort",
@@ -429,11 +362,13 @@ export default function ProductsPageInner() {
     return chips
   }, [filters, debouncedSearch, update])
 
+  const selectedStyleTrends = filters.styleTrend.split(",").filter(Boolean)
+
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-[1400px] space-y-4 p-4 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight">상품 DB</h1>
+        <h1 className="text-xl font-bold tracking-tight">상품 탐색</h1>
         <span className="text-xs text-muted-foreground tabular-nums">
           {total.toLocaleString()}개 상품
         </span>
@@ -446,6 +381,29 @@ export default function ProductsPageInner() {
             필터 옵션 로드 실패: {optionsError}
           </div>
         )}
+
+        {/* Row 0: 스타일(트렌드) — 맨 앞. 더미 옵션, 아직 API 미연동 */}
+        <FilterRow label="스타일">
+          <div className="flex flex-wrap items-center gap-1">
+            {STYLE_TREND_OPTIONS.map((val) => {
+              const active = selectedStyleTrends.includes(val)
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => toggleStyleTrend(val)}
+                  className={`h-8 px-2.5 rounded-md border text-xs transition-colors ${
+                    active
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:border-foreground/40"
+                  }`}
+                >
+                  {val}
+                </button>
+              )
+            })}
+          </div>
+        </FilterRow>
 
         {/* Row 1: Search + Sort + Reset */}
         <div className="flex flex-wrap items-center gap-2">
@@ -518,16 +476,6 @@ export default function ProductsPageInner() {
               />
             )}
           </select>
-          <select
-            value={filters.platform}
-            onChange={(e) => update({platform: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="">플랫폼</option>
-            {options && (
-              <OptionList options={options.platforms} includeSelected={filters.platform} />
-            )}
-          </select>
           <div className="flex items-center gap-1">
             {([["men", "남"], ["women", "여"], ["unisex", "공용"]] as const).map(([val, lbl]) => {
               const selected = filters.gender.split(",").filter(Boolean)
@@ -580,46 +528,6 @@ export default function ProductsPageInner() {
                 labelKey="label"
               />
             )}
-          </select>
-        </FilterRow>
-
-        {/* Row 3: 상태 */}
-        <FilterRow label="상태">
-          <select
-            value={filters.embeddingStatus}
-            onChange={(e) => update({embeddingStatus: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="all">임베딩 여부</option>
-            <option value="embedded">있음</option>
-            <option value="no_embedding">없음</option>
-          </select>
-          <select
-            value={filters.stockStatus}
-            onChange={(e) => update({stockStatus: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="all">재고</option>
-            <option value="in_stock">판매중</option>
-            <option value="out_of_stock">품절</option>
-          </select>
-          <select
-            value={filters.featureStatus}
-            onChange={(e) => update({featureStatus: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="all">VLM 분석</option>
-            <option value="with_features">있음</option>
-            <option value="no_features">없음</option>
-          </select>
-          <select
-            value={filters.reviewStatus}
-            onChange={(e) => update({reviewStatus: e.target.value})}
-            className={SELECT_CLASS}
-          >
-            <option value="all">리뷰</option>
-            <option value="with_reviews">있음</option>
-            <option value="no_reviews">없음</option>
           </select>
         </FilterRow>
 

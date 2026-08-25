@@ -1,11 +1,17 @@
 import {NextRequest, NextResponse} from "next/server"
-import {requireApprovedAdmin} from "@/lib/admin-auth"
 import {supabase} from "@/lib/supabase"
 import {KOREAN_VOCAB} from "@/shared/enums/korean-vocab"
 
-// SPEC-SEARCH-V6-001 P2: product_ai_analysis (PAI) 폐기 후 어드민 상품 목록.
-// v6 에서 product-level 스타일/색/핏 categorical 라벨은 임베딩이 대체.
-// 어드민 필터는 products 컬럼 + brand_nodes.primary_style_node_id + product_embeddings 만 사용.
+// 공개 크리에이터용 상품 탐색 API — admin-tools/products/products.route.ts 를
+// 읽기 전용 축소 복제한 것.
+//
+// 어드민판 대비 제거된 것: requireApprovedAdmin 게이트, embeddingStatus/featureStatus
+// (product_embeddings·product_features 조회 자체를 하지 않음), platform 필터,
+// reviewStatus 필터, stockStatus 필터 UI(대신 in_stock=true 를 항상 강제).
+// 응답에도 내부 식별자(brandNodeId)·타임스탬프·리뷰수·임베딩/VLM 상태를 넣지 않는다.
+//
+// 유지: 검색(한국어 확장), 카테고리/서브카테고리, 성별, 스타일 노드, 가격대, 정렬.
+// 신규: product_url 을 select·응답에 포함 (카드 클릭 시 외부 자사몰로 이동).
 
 const PAGE_SIZE = 60
 
@@ -23,16 +29,12 @@ function expandSearchTerms(raw: string): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const gate = await requireApprovedAdmin()
-  if (gate instanceof NextResponse) return gate
-
   const {searchParams} = request.nextUrl
   const page = Math.max(0, parseInt(searchParams.get("page") || "0") || 0)
   const sanitize = (s: string) => s.replace(/[.,()\\]/g, "")
   const search = sanitize(searchParams.get("search")?.trim() || "")
   const category = searchParams.get("category") || ""
   const subcategory = searchParams.get("subcategory") || ""
-  const platform = searchParams.get("platform") || ""
   const brand = sanitize(searchParams.get("brand") || "")
   const styleNodeCode = searchParams.get("styleNode") || ""
   // 성별 다중선택: 콤마 구분(예: "men,unisex"). 선택된 값들과 products.gender 가 겹치면 통과.
@@ -44,12 +46,6 @@ export async function GET(request: NextRequest) {
   const priceMin = Number.isNaN(priceMinRaw) || priceMinRaw < 0 ? null : priceMinRaw
   const priceMaxRaw = parseInt(searchParams.get("priceMax") || "", 10)
   const priceMax = Number.isNaN(priceMaxRaw) || priceMaxRaw < 0 ? null : priceMaxRaw
-  const embeddingStatus = searchParams.get("embeddingStatus") || "all" // all | embedded | no_embedding
-  const stockStatus = searchParams.get("stockStatus") || "all"
-  // 2026-07-29: products.description 제거 → "상세 유무" 필터가 의미를 잃었다.
-  // VLM 분석(product_features) 보유 여부로 재정의 (all | with_features | no_features).
-  const featureStatus = searchParams.get("featureStatus") || "all"
-  const reviewStatus = searchParams.get("reviewStatus") || "all"
   const sort = searchParams.get("sort") || "newest"
 
   let orderCol = "created_at"
@@ -86,15 +82,15 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("products")
     .select(
-      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count",
+      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, category, product_url",
       {count: "exact"}
     )
+    // 공개 페이지: 품절 상품은 항상 숨김 (재고 필터 UI 는 없고 이 조건만 고정).
+    .eq("in_stock", true)
 
   if (brandIdAllowList) query = query.in("brand_node_id", brandIdAllowList)
-  // 서브카테고리는 products.subcategory 직접 컬럼(백필됨, ~11만) 으로 필터
+  // 서브카테고리는 products.subcategory 직접 컬럼(백필됨) 으로 필터
   if (subcategory) query = query.eq("subcategory", subcategory)
-  if (stockStatus === "in_stock") query = query.eq("in_stock", true)
-  else if (stockStatus === "out_of_stock") query = query.eq("in_stock", false)
   if (search) {
     const terms = expandSearchTerms(search)
     const ors = terms.flatMap((t) => {
@@ -104,27 +100,16 @@ export async function GET(request: NextRequest) {
     if (ors.length > 0) query = query.or(ors.join(","))
   }
   if (category) query = query.eq("category", category)
-  if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
   if (genders.length > 0) query = query.overlaps("gender", genders)
   if (priceMin != null) query = query.gte("price", priceMin)
   if (priceMax != null) query = query.lte("price", priceMax)
-  if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
-  else if (reviewStatus === "no_reviews") query = query.or("review_count.is.null,review_count.eq.0")
 
   query = query.order(orderCol, {ascending: orderAsc, nullsFirst: false})
   query = query.order("id", {ascending: false})
 
-  // embeddingStatus / featureStatus 필터는 결과 page 에서 post-filter
-  // (product_embeddings / product_features 를 PostgREST select 로 JOIN 하기 어렵다)
-  const needsEmbeddingFilter = embeddingStatus !== "all"
-  const needsFeatureFilter = featureStatus !== "all"
-  if (needsEmbeddingFilter || needsFeatureFilter) {
-    query = query.range(0, 1999)
-  } else {
-    const from = page * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
-  }
+  const from = page * PAGE_SIZE
+  query = query.range(from, from + PAGE_SIZE - 1)
 
   const {data, count, error} = await query
   if (error) return NextResponse.json({error: error.message}, {status: 500})
@@ -132,45 +117,14 @@ export async function GET(request: NextRequest) {
   type ProductRow = {
     id: number; brand: string; brand_node_id: number | null; name: string;
     price: number | null; source_currency: string | null; source_price: number | null;
-    image_url: string | null; platform: string; category: string | null;
-    in_stock: boolean; gender: string[] | null; created_at: string;
-    review_count: number | null;
+    image_url: string | null; category: string | null; product_url: string | null;
   }
 
-  let rows = (data ?? []) as ProductRow[]
-  let totalCount = count ?? 0
+  const rows = (data ?? []) as ProductRow[]
+  const totalCount = count ?? 0
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
-  // embeddingStatus / featureStatus post-filter — 두 필터가 동시에 걸릴 수 있으므로
-  // 둘 다 적용한 뒤에 한 번만 페이지네이션한다 (중복 slice 방지).
-  let embeddedSet: Set<number> | null = null
-  let featureSet: Set<number> | null = null
-  if ((needsEmbeddingFilter || needsFeatureFilter) && rows.length > 0) {
-    const ids = rows.map((r) => r.id)
-    if (needsEmbeddingFilter) {
-      const {data: embRows} = await supabase
-        .from("product_embeddings")
-        .select("product_id")
-        .in("product_id", ids)
-      embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
-      rows = rows.filter((r) =>
-        embeddingStatus === "embedded" ? embeddedSet!.has(r.id) : !embeddedSet!.has(r.id)
-      )
-    }
-    if (needsFeatureFilter) {
-      const {data: featRows} = await supabase
-        .from("product_features")
-        .select("product_id")
-        .in("product_id", rows.map((r) => r.id))
-      featureSet = new Set((featRows ?? []).map((r) => r.product_id as number))
-      rows = rows.filter((r) =>
-        featureStatus === "with_features" ? featureSet!.has(r.id) : !featureSet!.has(r.id)
-      )
-    }
-    totalCount = rows.length
-    rows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-  }
-
-  // 페이지 상품들의 brand_node → style_node 매핑 batch-fetch
+  // 페이지 상품들의 brand_node → style_node 매핑 batch-fetch (brand_node_id 자체는 응답에 넣지 않음)
   const brandNodeIds = Array.from(
     new Set(rows.map((r) => r.brand_node_id).filter((v): v is number => v != null))
   )
@@ -190,44 +144,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 페이지 상품의 embedding / VLM feature 보유 여부 (이미 fetch한 경우 재사용)
-  if (rows.length > 0) {
-    const ids = rows.map((r) => r.id)
-    if (!embeddedSet) {
-      const {data: embRows} = await supabase
-        .from("product_embeddings")
-        .select("product_id")
-        .in("product_id", ids)
-      embeddedSet = new Set((embRows ?? []).map((r) => r.product_id as number))
-    }
-    if (!featureSet) {
-      const {data: featRows} = await supabase
-        .from("product_features")
-        .select("product_id")
-        .in("product_id", ids)
-      featureSet = new Set((featRows ?? []).map((r) => r.product_id as number))
-    }
-  }
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
-
   const result = rows.map((p) => {
     const style = p.brand_node_id != null ? styleByBrandNode.get(p.brand_node_id) ?? null : null
     return {
       id: String(p.id),
       brand: p.brand,
-      brandNodeId: p.brand_node_id,
       name: p.name,
       price: p.price,
       sourceCurrency: p.source_currency,
       sourcePrice: p.source_price,
       imageUrl: p.image_url,
-      platform: p.platform,
       category: p.category,
-      inStock: p.in_stock,
-      hasFeatures: featureSet ? featureSet.has(p.id) : false,
-      reviewCount: p.review_count ?? 0,
-      hasEmbedding: embeddedSet ? embeddedSet.has(p.id) : false,
+      productUrl: p.product_url,
       styleNode: style ? {code: style.code, name_en: style.name_en} : null,
     }
   })

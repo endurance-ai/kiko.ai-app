@@ -1,0 +1,1853 @@
+/* Ported 1:1 from /chat/index.html (design-finalized mockup). Do not "improve". */
+
+.root {
+  --bg: #ffffff;
+  --bg2: #f5f5f7;
+  --bg3: #eeeef1;
+  --label: #1c1c1e;
+  --placeholder: #b4b4ba;
+  --gray: #8e8e93;
+  --gray2: #aeaeb2;
+  --separator: rgba(60, 60, 67, 0.29);
+  --sep-soft: rgba(60, 60, 67, 0.1);
+  --fill: #e9e9ee;
+  --fill-2: #dedee3;
+  --radius-box: 24px;
+  --radius-card: 16px;
+  --pill: 9999px;
+  /* 브랜드 피치 (kikoai-mobile theme/brand.ts) */
+  --peach-100: #fce4d2;
+  --peach-200: #f5cdb6;
+  --peach-300: #eebda5;
+  --sf: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Apple SD Gothic Neo",
+    "Pretendard Variable", sans-serif;
+  --spring: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --sh-raised: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --sh-card: 0 2px 6px rgba(0, 0, 0, 0.06), 0 12px 34px rgba(0, 0, 0, 0.07);
+
+  background: var(--bg);
+  color: var(--label);
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  min-height: 100vh;
+}
+.root * {
+  box-sizing: border-box;
+}
+
+/* 상단 네비 */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 80px; /* 100은 커 보인다는 피드백 — 투명 헤더로 바뀌며 80으로 압축 */
+  /* daydream 헤더 문법: 불투명 바가 아니라 "바 없음" — 콘텐츠가 뒤로 흐르고
+     상단이 흰 페이드 + 프로그레시브 블러로 사라진다. 탭 필/CTA만 떠 있는 구조 */
+  background: transparent;
+}
+.nav::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -24px; /* 페이드 꼬리를 nav 아래로 살짝 흘림 */
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 30%, rgba(255, 255, 255, 0.6) 62%, rgba(255, 255, 255, 0));
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent 100%);
+  z-index: -1; /* .nav 가 sticky+z-index 로 자체 스태킹 컨텍스트라 페이지 뒤로 빠지지 않음 */
+}
+.navIn {
+  /* daydream: max-width 없음, 풀뷰포트 + 좌우 24px — 1120 가두면 편협해 보임 */
+  height: 100%;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; /* 로고 절대 중앙 (탭 3개여도 안 밀림) */
+  align-items: center;
+}
+.navIn > a[aria-label] {
+  justify-self: center;
+}
+.navIn > .navCta {
+  justify-self: end;
+}
+.logo {
+  height: 22px;
+  width: auto;
+  display: block;
+  cursor: pointer;
+}
+.navCta {
+  height: 44px; /* daydream 실측 44 */
+  padding: 0 22px;
+  border-radius: var(--pill);
+  background: var(--label);
+  color: #fff;
+  border: 0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.navCta:active {
+  transform: scale(0.97);
+}
+.navL {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+}
+
+/* 좌측 탭 (Explore / Chat / Finder) — 애플 Glass.chip 재질
+   (kikoai-mobile glass-surface: 흰 서피스 + hairline separator + Elevation.raised, radius=pill) */
+.navTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--pill);
+  padding: 4px;
+  height: 44px; /* daydream 실측 44 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Elevation.raised */
+}
+.navTab {
+  height: 36px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--pill);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray);
+  text-decoration: none;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  transition: color 0.2s;
+}
+.navTab:active {
+  transform: scale(0.96);
+}
+.navTab.navTabOn {
+  color: var(--label);
+  font-weight: 600; /* 애플 semibold — 700 아님 */
+}
+
+/* ── 히어로 ── */
+.hero {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 28px;
+  min-height: calc(100vh - 80px); /* nav 80px */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 28px; /* 칩 2줄까지 첫 화면에 들어오도록 압축 */
+  padding-bottom: 36px;
+}
+.headline {
+  font-family: var(--sf);
+  font-weight: 500;
+  font-size: clamp(36px, 5.4vw, 62px);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  text-align: center;
+  margin: 0 0 14px;
+  max-width: 22ch;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+/* 신뢰 서브라인 — 직행 패턴(타이틀 아래 라이브 수치), 회색 조용히 */
+.subline {
+  font-size: 16px;
+  color: var(--gray);
+  letter-spacing: -0.01em;
+  text-align: center;
+  margin: 0 0 28px;
+  font-variant-numeric: tabular-nums;
+}
+/* 성별 세그먼트 */
+.seg {
+  display: inline-flex;
+  background: var(--fill);
+  border-radius: var(--pill);
+  padding: 3px;
+  margin: 0 auto 22px;
+}
+.seg button {
+  height: 38px;
+  padding: 0 22px;
+  border: 0;
+  background: 0 0;
+  color: var(--gray);
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--pill);
+  cursor: pointer;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  transition: all 0.2s;
+}
+.seg button.segOn {
+  background: var(--label);
+  color: #fff;
+}
+
+/* 입력 박스 */
+.askwrap {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  border-radius: var(--radius-box);
+  /* 글로우 없음 — 포컬은 BorderBeam 만 담당 (사용자 확정) */
+}
+/* 글로우는 별도 요소가 아니라 askbox box-shadow 로 처리 (daydream 실측 방식) —
+   z-index:-1 halo 는 page bg 뒤로 깔려 안 보이는 버그가 있어 폐기 */
+.askwrapDeprecatedGlow {
+  display: none;
+  opacity: 0.72;
+}
+.askbox {
+  position: relative;
+  background: var(--bg);
+  border-radius: var(--radius-box);
+  min-height: 158px;
+  padding: 24px 24px 0;
+  display: flex;
+  flex-direction: column;
+  border: 0.5px solid var(--separator); /* daydream 1px/.12 상당 — 애플 hairline 로 */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); /* 기본 섀도우 — 글로우는 .askwrap 담당 */
+}
+.askbox textarea {
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: 0 0;
+  font-family: var(--sf);
+  font-size: 18px;
+  color: var(--label);
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  min-height: 58px;
+  width: 100%;
+}
+.askbox textarea::placeholder {
+  color: var(--placeholder);
+}
+.askrow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: auto;
+  height: 66px;
+  border-top: 0.5px solid var(--sep-soft);
+}
+.imgbtn {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  background: 0 0;
+  color: var(--gray);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.imgbtn:hover {
+  background: var(--fill);
+}
+.sendbtn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--gray2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.2s;
+}
+.sendbtn.sendReady {
+  background: var(--label);
+}
+.sendbtn span {
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: -1px;
+}
+.sendbtn:active {
+  transform: scale(0.9);
+}
+
+/* 예시 칩 */
+.exwrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 24px;
+  max-width: 760px;
+}
+/* 예시 칩 — 흰 글래스(아웃라인): 회색 채움이면 컴포저보다 무거워져 위계 역전
+   (daydream: 칩=가벼운 아웃라인, 컴포저=글로우 포컬) */
+.chipGlass {
+  background: var(--bg);
+  border: 0.5px solid var(--separator);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Elevation.raised */
+}
+.chipGlass:hover {
+  background: #fbfbfd;
+}
+/* 이미 탭한 clarify 선택지 — 비활성 음영으로 이력 보존 (모바일 문법) */
+.chipPicked {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.chip {
+  height: 44px; /* Apple 44pt touch target */
+  padding: 0 20px;
+  border-radius: var(--pill);
+  background: var(--fill);
+  border: 0;
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--sf);
+  letter-spacing: -0.006em;
+  word-break: keep-all;
+  transition: transform 0.15s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+.chip:hover {
+  background: var(--fill-2);
+}
+.chip:active {
+  transform: scale(0.96);
+}
+
+/* ── 대화 (결과) ── */
+.convo {
+  display: block;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 80px 28px 160px; /* nav 100px sticky — daydream 수준 여백(80px)으로 첫 턴이 안 붙게 */
+}
+.turn {
+  margin-bottom: 44px;
+  scroll-margin-top: 160px; /* nav 80px + 80px 여백 — refine 칩 제출 시에도 동일한 공기 유지 */
+}
+.userrow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+.userbubble {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 24px 24px 8px 24px; /* bottom-right squared = sender side, iMessage grammar */
+  background: var(--label);
+  color: #fff;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+.agent {
+  display: inline-block;
+  max-width: 80%;
+  background: var(--bg2);
+  border-radius: 24px 24px 24px 8px; /* bottom-left squared = receiver side */
+  padding: 14px 18px;
+  font-size: 16px;
+  color: var(--label);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+  opacity: 0;
+  transform: translateY(6px);
+  animation: rise 0.5s var(--spring) forwards;
+}
+/* Finder 통로 칩 — 회색 리파인 칩과 구분: Glass.chip(흰+hairline+raised) */
+.finderLink {
+  background: var(--bg);
+  border: 0.5px solid var(--separator);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Elevation.raised */
+  font-weight: 600;
+  text-decoration: none;
+}
+.finderChevron {
+  margin-left: 3px;
+  color: var(--gray);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+.pcard {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.97);
+  animation: bloom 0.5s var(--spring) forwards;
+}
+.pcard.pcardOut {
+  display: none;
+}
+.thumb {
+  aspect-ratio: 3/4;
+  background: var(--bg3);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  position: relative;
+}
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 카드 선택 체크 — 아주 투명한 글래스 (상품 시야 방해 최소화, 사용자 확정).
+   글리프가 보더빔 그래디언트라 원 자체는 거의 사라져도 인지된다 */
+.ovl {
+  position: absolute;
+  top: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0.5px solid rgba(60, 60, 67, 0.14);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  color: var(--label);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.2s, opacity 0.2s;
+}
+.ovl:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+.pcard:hover .ovl {
+  opacity: 1;
+}
+.dismiss {
+  left: 10px;
+}
+.pin {
+  top: auto;
+  bottom: 10px;
+  left: 10px;
+}
+.ovl:active {
+  transform: scale(0.86);
+}
+.pin.pinOn {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.78); /* 반전 없이 살짝만 진해짐 — 빔 링이 선택을 말한다 */
+  border-color: transparent; /* 빔 링과 이중 테두리 방지 */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+/* 선택 시 보더빔 링 래퍼 — 버튼 자리를 그대로 차지하는 absolute 앵커 */
+.pinBeamWrap {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  border-radius: 50%;
+  display: block;
+}
+/* 래퍼가 위치를 맡으므로 버튼 자체는 정적 배치로 전환 */
+.pin.pinStatic {
+  position: static;
+}
+.pmeta {
+  padding: 10px 2px 0;
+}
+.pbrand {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pname {
+  font-size: 12.5px;
+  color: var(--gray);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pprice {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.refine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 20px;
+}
+
+/* 스트리밍 로딩 라인 — 텍스트/상품이 아직 없을 때 (3점 스피너 + shimmer 텍스트) */
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px 20px;
+}
+.spinnerDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.spinnerDots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gray2);
+  animation: spinnerBlink 1.2s ease-in-out infinite;
+}
+.spinnerDots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.spinnerDots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.shimmerText {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  background: linear-gradient(90deg, var(--gray2) 0%, var(--label) 50%, var(--gray2) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmerMove 1.6s linear infinite;
+}
+
+/* "더보기 (N)" — 회색 캡슐 플레이스홀더 */
+.moreBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px; /* Apple 44pt touch target */
+  padding: 0 20px;
+  margin-top: 4px;
+  border-radius: var(--pill);
+  background: var(--fill);
+  color: var(--gray);
+  border: 0;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  transition: background 0.2s, transform 0.15s;
+}
+.moreBtn:hover {
+  background: var(--fill-2);
+}
+.moreBtn:active {
+  transform: scale(0.97);
+}
+
+/* ── 상세 (PDP) 모달 ── */
+.pdp {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.pdp.pdpOn {
+  display: flex;
+}
+/* 리퀴드 글래스 시트 — 애플 유리 재질(불투명 화이트박스 아님) */
+.pdpSheet {
+  /* 애플 시트 문법: 콘텐츠 시트는 불투명 흰색 — 글래스는 컨트롤(닫기 버튼)에만.
+     (HIG: 글래스=내비/컨트롤 레이어 전용, 콘텐츠 표면 금지) */
+  background: var(--bg);
+  width: 100%;
+  max-width: 960px;
+  max-height: 92vh;
+  border-radius: 28px;
+  padding: 20px;
+  overflow: auto;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  animation: pop 0.35s var(--spring);
+}
+@media (max-width: 760px) {
+  .pdpSheet {
+    max-width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+/* 닫기 — 애플 퀵룩 실물: ~44px 원 + hairline + 검정 X (터치 타깃 44) */
+.pdpClose {
+  position: sticky; /* 시트 내부 스크롤에도 우상단에 고정 */
+  top: 18px;
+  z-index: 5;
+  display: flex;
+  margin-left: auto;
+  margin-right: 18px;
+  margin-top: 18px;
+  margin-bottom: -62px; /* 44px 높이 + 18px 상단 마진 — 흐름 자리 차지 제거 */
+  width: 44px;
+  height: 44px;
+  border: 0.5px solid var(--separator);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--label);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+/* ── 애플 문법 PDP: 순백 갤러리+닷 | eyebrow→타이틀→가격줄 | 주/부 버튼 | 하단 가로 셸프 ── */
+.pdpTop {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 32px;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .pdpTop {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  /* 스택 레이아웃(갤러리 위/정보 아래)에서 좌우 정렬이 맞도록 비대칭 패딩(우28/좌0) 제거 */
+  .pdpInfo {
+    padding: 4px 0 4px;
+  }
+}
+/* 갤러리 — apple.com 문법: 순백 위 contain + 가로 스와이프(scroll-snap) + 닷 */
+.pdpGallery {
+  position: relative;
+  background: var(--bg);
+  aspect-ratio: 4/5;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.pdpGalleryTrack {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.pdpGalleryTrack::-webkit-scrollbar {
+  display: none;
+}
+.pdpSlide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always; /* 빠른 스와이프에도 1장씩 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pdpSlide img {
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  display: block;
+}
+/* 닷 — 애플 퀵룩: 이미지 아래 별도 줄 (오버레이 아님) */
+.pdpGalleryCol {
+  display: flex;
+  flex-direction: column;
+}
+.pdpDots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 12px;
+}
+.pdpDot,
+.pdpDotOn {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gray2);
+}
+.pdpDotOn {
+  background: var(--label);
+}
+.pdpInfo {
+  padding: 8px 28px 8px 0;
+}
+/* eyebrow 브랜드 (작은 회색) → 타이틀 상품명 — 애플: 제품명이 주인공 */
+.pdpEyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray);
+  letter-spacing: 0.01em;
+}
+.pdpTitle {
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 6px;
+  line-height: 1.25;
+  word-break: keep-all;
+}
+.pdpPriceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
+}
+.pdpPrice {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* 정가 취소선 — 애플식: 조용한 회색, 배지 없음 */
+.pdpDiscount {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ff3b30; /* iOS systemRed */
+  font-variant-numeric: tabular-nums;
+}
+.pdpPriceOld {
+  font-size: 15px;
+  color: var(--gray);
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+/* 갤러리 다음 이미지 화살표 — 컨트롤 레이어(글래스 허용) */
+.pdpArrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0.5px solid var(--separator);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--label);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--sh-raised);
+  transition: transform 0.15s, background 0.2s;
+}
+.pdpArrow:hover {
+  background: #fff;
+}
+.pdpArrow:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+/* Buy 1줄 (풀폭 캡슐) → 재쿼리 2버튼 1줄 — iOS 26 캡슐 버튼 */
+/* 상세 도착 전(구매 링크 미확보) Buy — 비활성 톤 */
+.pdpCtaDisabled {
+  background: var(--gray2) !important;
+  pointer-events: none;
+}
+.pdpCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 52px;
+  margin-top: 26px;
+  background: var(--label);
+  color: #fff;
+  border-radius: var(--pill);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.pdpCta:active {
+  transform: scale(0.99);
+}
+.pdpCta2Row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.pdpCta2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  background: var(--fill);
+  color: var(--label);
+  border: 0;
+  border-radius: var(--pill);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+.pdpCta2:hover {
+  background: var(--fill-2);
+}
+.pdpCta2:active {
+  transform: scale(0.99);
+}
+/* 하단 비슷한 상품 — 4열 세로 그리드 (구분선 없음, 여백으로만) */
+.pdpShelfWrap {
+  margin-top: 30px;
+}
+.pdpSimLabel {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--label);
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+}
+.pdpShelf {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .pdpShelf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.pdpShelfCard {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pdpShelfCard .thumb {
+  aspect-ratio: 3/4;
+  border-radius: 12px;
+}
+.pdpShelfCard .sb {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdpShelfCard .sn {
+  font-size: 12px;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdpShelfCard .spPct {
+  color: #ff3b30;
+  font-weight: 600;
+}
+.pdpShelfCard .sp {
+  font-size: 12px;
+  color: var(--gray);
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 사용량 한도 모달 (cap_reached) ──
+   PDP와 동일한 백드롭/시트 문법을 재사용하되, 작은 알럿형 시트(max-width 420)로 축소.
+   콘텐츠 시트는 불투명 흰색 — 글래스는 컨트롤 레이어 전용이라는 HIG 규칙을 그대로 따른다. */
+.capModal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.capModal.capModalOn {
+  display: flex;
+}
+.capSheet {
+  background: var(--bg);
+  width: 100%;
+  max-width: 420px;
+  border-radius: 28px;
+  padding: 28px 24px 20px;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  animation: pop 0.35s var(--spring);
+}
+.capTitle {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--label);
+}
+.capSubtitle {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gray);
+  letter-spacing: -0.006em;
+}
+.capCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  margin-top: 22px;
+  background: var(--label);
+  color: #fff;
+  border-radius: var(--pill);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.capCta:active {
+  transform: scale(0.99);
+}
+.capCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px; /* Apple 44pt touch target */
+  margin-top: 2px;
+  padding: 0 16px;
+  background: 0 0;
+  border: 0;
+  color: var(--gray);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+}
+
+/* 하단 리파인 컴포저 */
+.dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 18px 28px 26px;
+  display: block;
+  /* 흰 배경 위에서 컴포저가 묻히지 않도록 — 흰 페이드 대신 얇은 다크 스크림.
+     글래스(.dockIn 블러)가 스크림 위에서 소재감이 살아난다 */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.09), rgba(0, 0, 0, 0.03) 60%, transparent);
+}
+.dockRow {
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* 핀 선택 칩 행 — 컴포저 위, 컴포저와 같은 560 그리드에 정렬. 컴팩트 스케일(36px) */
+.dockChips {
+  max-width: 560px;
+  margin: 0 auto 10px;
+  padding-left: 8px; /* dockRing 패딩만큼 밀어 컴포저 필드 좌측과 픽셀 정렬 */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.dockPinned {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 3px 7px 3px 3px;
+  border-radius: var(--pill);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid var(--separator);
+  box-shadow: var(--sh-raised);
+  min-width: 0;
+}
+.dockPinned img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  flex: 0 0 auto;
+}
+.dockPinnedName {
+  max-width: 150px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dockPinned button {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--gray);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.dockPinned button:hover {
+  background: var(--fill-2);
+}
+/* 크리틱 칩 — 컴포저 위 컴팩트 스케일 (기본 .chip 44 대신 36) */
+.dockChips .chip {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+
+/* 바깥 링 — 리퀴드글래스: 뒤 콘텐츠가 블러로 비쳐 보이는 프레임 (daydream 문법) */
+.dockRing {
+  padding: 8px;
+  border-radius: var(--pill);
+  background: rgba(255, 255, 255, 0.26);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  border: 0.5px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* 안쪽 필드 — 불투명 흰 컴포저 */
+.dockIn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  background: #fff;
+  border-radius: var(--pill);
+  border: 0.5px solid rgba(0, 0, 0, 0.04);
+  padding: 0 7px 0 22px; /* 좌측 여유 — 타이포가 필 곡률에 붙지 않게 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.dockIn input {
+  flex: 1;
+  border: 0;
+  background: 0 0;
+  font-size: 16px;
+  color: var(--label);
+  outline: none;
+  font-family: var(--sf);
+  letter-spacing: -0.01em;
+}
+.dockIn input::placeholder {
+  color: var(--placeholder);
+}
+/* 사용량 한도 도달 — 컴포저 잠금 (기존 톤 그대로, 불투명도만 낮춤) */
+.dockIn.dockInLocked {
+  opacity: 0.6;
+}
+.dockIn.dockInLocked input {
+  cursor: not-allowed;
+}
+.sendbtn.sendDark {
+  background: var(--label);
+}
+.sendbtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* daydream: hover 시 원형 → "+ 새 검색" 알약으로 확장. 폭 자체를 트랜지션하지 않고
+   내부 라벨의 max-width/opacity 만 트랜지션 — 부모는 width:auto라 레이아웃이 매 프레임
+   따라오면서 자연스럽게 늘어난다(폭 고정값이면 스냅되므로 min-width만 사용). */
+.plusbtn {
+  flex: 0 0 auto;
+  min-width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: var(--pill);
+  border: 0.5px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  color: var(--label);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--sh-raised);
+  transition: transform 0.15s, background 0.2s, padding 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.plusbtn > span[aria-hidden] {
+  display: block;
+  transform: translateY(-1.5px); /* + 글리프 광학 중앙 보정 */
+}
+.plusbtn:hover {
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0 18px;
+}
+.plusbtn:active {
+  transform: scale(0.92);
+}
+.plusbtnLabel {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: max-width 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-left 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.plusbtn:hover .plusbtnLabel {
+  max-width: 80px;
+  opacity: 1;
+  margin-left: 6px;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .headline {
+    font-size: 30px;
+    margin-bottom: 28px;
+  }
+  .askbox {
+    min-height: 140px;
+  }
+  .navTab {
+    padding: 0 11px;
+    font-size: 12.5px;
+  }
+}
+
+/* ── 모바일 1순위 뷰포트(390~430px, 광고 유입 대부분) 미세조정.
+   데스크톱 규칙은 위에서 전혀 건드리지 않고, 이 미디어쿼리 안에서만 오버라이드한다. ── */
+@media (max-width: 430px) {
+  /* 네비 — 탭 필 + 중앙 로고 + CTA 3열이 좁은 폭에서도 겹치지 않게 전부 컴팩트화 */
+  .navIn {
+    padding: 0 14px;
+  }
+  .navTabs {
+    height: 36px;
+    padding: 2px;
+  }
+  .navTab {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+  .navCta {
+    height: 36px;
+    padding: 0 14px;
+    font-size: 12.5px;
+  }
+  .logo {
+    height: 18px;
+  }
+
+  /* 히어로 — 헤드라인 2줄 유지 위해 클램프 하한보다 더 낮춤, 첫 화면에 칩 일부까지 들어오도록 압축 */
+  .hero {
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 20px;
+  }
+  .headline {
+    font-size: 26px;
+    margin: 0 0 10px;
+  }
+  .subline {
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .seg {
+    margin: 0 auto 16px;
+  }
+  .askbox {
+    padding: 18px 18px 0;
+    min-height: 130px;
+  }
+  .exwrap {
+    margin-top: 18px;
+  }
+  /* 칩 시각 높이는 40(스펙 지정), 밀집 배치라 44pt 개별 히트존 대신 gap(10px)으로 오탭 방지 */
+  .chip {
+    height: 40px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+
+  /* 챗 대화 — 좌우 패딩 16, 버블 폭 88%로 확장 */
+  .convo {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .userbubble,
+  .agent {
+    max-width: 88%;
+  }
+
+  /* 하단 리파인 독 — 좌우 12 풀폭 */
+  .dock {
+    padding: 14px 12px 20px;
+  }
+
+  /* 사용량 한도 시트 — 풀폭에서 좌우 12(=화면폭-24)만 남기고 채움 */
+  .capModal {
+    padding: 12px;
+  }
+}
+
+@keyframes rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bloom {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes spinnerBlink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes shimmerMove {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent,
+  .pcard {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .spinnerDots span {
+    animation: none;
+    opacity: 0.6;
+  }
+  .shimmerText {
+    animation: none;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: var(--gray);
+  }
+  .root * {
+    transition: none !important;
+  }
+}
+
+/* ── 모바일 네비 (daydream 모바일 문법): 2단 — 로고+CTA 행 / 텍스트 탭+언더라인 행.
+   탭 필(글래스)은 모바일에서 해체 — 파일 뒤쪽 선언이라 위 430px 블록을 덮는다 */
+@media (max-width: 430px) {
+  .nav {
+    height: auto;
+  }
+  .navIn {
+    grid-template-rows: 50px 34px;
+    padding: 0 14px 6px;
+  }
+  .navIn > a[aria-label] {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .navIn > .navCta {
+    grid-row: 1;
+    grid-column: 3;
+  }
+  .navL {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+  .navTabs {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    height: auto;
+    padding: 0;
+    gap: 26px;
+  }
+  .navTab {
+    height: 32px;
+    padding: 0 2px;
+    font-size: 14.5px;
+    border-radius: 0;
+  }
+  .navTab.navTabOn {
+    box-shadow: inset 0 -2px 0 var(--label); /* 활성 탭 언더라인 (유지 확정) */
+  }
+  .hero {
+    min-height: calc(100vh - 90px);
+  }
+}
+
+/* 모바일 2단 네비는 면적이 커서 스크림을 더 진하게 — 탭 행 뒤로 카드가 비치지 않게 */
+@media (max-width: 430px) {
+  .nav::before {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.98) 55%, rgba(255, 255, 255, 0.8) 82%, rgba(255, 255, 255, 0));
+    mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  }
+}
+
+/* 모바일 네비 보강 (사용자 피드백): 스크롤 시 콘텐츠 비침 제거(거의 불투명), 로고·CTA 축소 */
+@media (max-width: 430px) {
+  .nav::before {
+    inset: 0 0 -14px;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+  }
+  .logo {
+    height: 15px;
+  }
+  .navCta {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+  .navIn {
+    grid-template-rows: 44px 32px;
+  }
+
+  /* 예시 칩 — 2줄 수평 스크롤 (사용자 확정): 세로로 쌓지 않고 옆으로 넘긴다 */
+  .exwrap {
+    display: grid;
+    grid-template-rows: repeat(2, auto);
+    grid-auto-flow: column;
+    justify-content: flex-start;
+    gap: 8px;
+    max-width: none;
+    width: calc(100% + 32px);
+    margin: 18px -16px 0;
+    padding: 4px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%);
+  }
+  .exwrap::-webkit-scrollbar {
+    display: none;
+  }
+  .exwrap .chip {
+    white-space: nowrap;
+    width: fit-content; /* 그리드 트랙 stretch 방지 — 칩 폭 = 텍스트 폭 */
+    justify-self: start;
+  }
+}
+
+/* ── 모바일 히어로 계층 재조정 (사용자 피드백): 타이틀이 1계층, 컴포저가 2계층으로
+   또렷하게 — 성별 세그·CTA·컴포저·전송버튼은 축소 ── */
+@media (max-width: 430px) {
+  .headline {
+    font-size: 31px;
+    line-height: 1.22;
+  }
+  .subline {
+    font-size: 12.5px;
+    margin-bottom: 18px;
+  }
+  .seg {
+    margin-bottom: 16px;
+  }
+  .seg button {
+    height: 31px;
+    padding: 0 15px;
+    font-size: 13px;
+  }
+  .askbox {
+    min-height: 104px;
+    padding: 14px 14px 0;
+    border-radius: 20px;
+  }
+  .askbox textarea {
+    font-size: 16px;
+    min-height: 42px;
+  }
+  .askrow {
+    height: 48px;
+  }
+  .sendbtn {
+    width: 34px;
+    height: 34px;
+  }
+  .sendbtn span {
+    font-size: 15px;
+  }
+
+  /* 예시 칩 — 핀터레스트식 지그재그: 2줄 수평 스크롤에서 아랫줄을 오른쪽으로 어긋나게
+     (auto-flow column 이라 짝수 자식 = 아랫줄) */
+  .exwrap {
+    padding-right: 84px; /* 아랫줄 30px 시프트 + 페이드 여유 — 마지막 칩 잘림 방지 */
+  }
+  .exwrap .chip {
+    height: 38px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+  .exwrap .chip:nth-child(2n) {
+    /* margin 은 컬럼 폭을 키워 칩 간격이 틀어짐 — transform 은 트랙에 영향 없이
+       아랫줄 전체를 균일하게 밀어 지그재그만 만든다 (잘림은 padding-right 로 흡수) */
+    transform: translateX(30px);
+  }
+
+  /* ── PDP: 한 화면에 사진·상품명·가격·Buy·재쿼리 버튼이 다 들어오게 ── */
+  .pdpClose {
+    width: 34px;
+    height: 34px;
+    top: 12px;
+    margin-top: 12px;
+    margin-right: 12px;
+    margin-bottom: -46px; /* 34px + 12px — sticky 흐름 상쇄 재계산 */
+  }
+  .pdpGallery {
+    aspect-ratio: auto;
+    height: 40vh;
+  }
+  .pdpArrow {
+    width: 32px;
+    height: 32px;
+  }
+  .pdpTitle {
+    font-size: 19px;
+  }
+  .pdpPriceRow {
+    margin-top: 10px;
+  }
+  .pdpCta {
+    height: 46px;
+  }
+  .pdpCta2 {
+    height: 42px;
+  }
+}
+
+/* 챗 빈 상태 미니 히어로 — 빈 화면 대신 타이틀 + 예시 칩 (daydream 문법) */
+.emptyHero {
+  min-height: calc(100vh - 340px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 16px 0;
+}
+.emptyTitle {
+  font-family: var(--sf);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+.emptySub {
+  font-size: 15px;
+  color: var(--gray);
+  margin: 0 0 24px;
+}
+.emptyChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 560px;
+}
+@media (max-width: 430px) {
+  .emptyTitle {
+    font-size: 24px;
+  }
+  .emptyChips .chip {
+    height: 38px;
+    padding: 0 15px;
+    font-size: 14px;
+  }
+}
+
+/* PDP 모바일 — 버튼들이 보이는 선에서 이미지 최대화 (사용자 피드백) */
+@media (max-width: 430px) {
+  .pdpGallery {
+    height: 46vh;
+  }
+  .pdpSlide img {
+    width: 100%;
+    height: 100%;
+  }
+  .pdpEyebrow {
+    margin-top: 2px;
+  }
+  .pdpTitle {
+    margin-top: 2px;
+  }
+  .pdpPriceRow {
+    margin-top: 8px;
+  }
+  .pdpCta {
+    margin-top: 14px;
+  }
+  .pdpCta2Row {
+    margin-top: 8px;
+  }
+  .pdpDots {
+    margin-top: 8px;
+  }
+}
+
+/* ── PDP 모바일 최종 (파일 끝 선언 = 캐스케이드 우승, 사용자 확정: 앱 PDP처럼 꽉 차게) ── */
+@media (max-width: 760px) {
+  /* 기본 .pdpInfo 의 우측 28px 패딩이 스택 레이아웃에서 좌우 비대칭을 만들던 버그 —
+     선언 순서 때문에 기존 오버라이드가 지고 있었다. 여기(파일 끝)서 확정 */
+  .pdpInfo {
+    padding: 6px 0;
+  }
+}
+@media (max-width: 430px) {
+  .pdpSheet {
+    padding: 16px;
+  }
+  /* 앱 PDP 문법: 히어로 이미지 풀블리드(시트 폭 전체), cover 로 꽉 채움 */
+  .pdpGallery {
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    height: auto;
+    aspect-ratio: 4/5;
+    border-radius: 0;
+  }
+  .pdpSlide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .pdpClose {
+    margin-right: 4px;
+  }
+}
+
+/* 컨트롤 글리프 웨이트 — SF Symbols 세미볼드 감각으로 (얇으면 애플 자산처럼 안 읽힘) */
+.pdpClose svg {
+  stroke-width: 2.8px;
+}
+.pdpArrow svg {
+  stroke-width: 3px;
+}
+
+/* ── 모바일 = 앱 화면 구조, 재질은 웹 (사용자 확정) ──
+   챗 상품 노출: 앱 home 문법 = 가로 캐러셀 (카드 156×196, 간격 12, 스냅) */
+@media (max-width: 430px) {
+  .grid {
+    display: flex;
+    gap: 12px;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 2px 20px 6px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent 100%);
+  }
+  .grid::-webkit-scrollbar {
+    display: none;
+  }
+  .pcard {
+    flex: 0 0 156px;
+    scroll-snap-align: start;
+  }
+  .pcard .thumb {
+    aspect-ratio: 156 / 196;
+  }
+  .pmeta {
+    padding: 8px 2px 0;
+  }
+  .pbrand {
+    font-size: 12.5px;
+  }
+  .pname {
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pprice {
+    font-size: 12px;
+  }
+  .grid .ovl {
+    width: 28px;
+    height: 28px;
+  }
+  .grid .ovl svg {
+    width: 13px;
+    height: 13px;
+  }
+  .grid .pin {
+    left: 8px;
+    bottom: 8px;
+  }
+
+  /* PDP 비슷한 상품: 앱과 동일 3열 */
+  .pdpShelf {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pdpShelfCard .sb {
+    font-size: 11px;
+  }
+  .pdpShelfCard .sn {
+    font-size: 10.5px;
+  }
+  .pdpShelfCard .sp {
+    font-size: 11.5px;
+  }
+}
+
+/* ── 모바일 네비 확정판 (사용자 피드백: 답답함·스크롤 시 마진 깨짐) ──
+   pseudo 스크림 대신 단순 불투명 바 — 콘텐츠 비침 원천 차단. 행 높이·상단 여백 재조정 */
+@media (max-width: 430px) {
+  .nav {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 0; /* 전체 가로선 제거 (사용자 확정) — 구분은 탭 언더라인만 */
+  }
+  .nav::before {
+    display: none;
+  }
+  .navIn {
+    grid-template-rows: 50px 38px;
+    padding: 6px 14px 4px;
+  }
+}
+
+/* 모바일 챗 — 첫 말풍선이 헤더 바로 아래 오도록 (내려앉음 피드백) */
+@media (max-width: 430px) {
+  .convo {
+    padding-top: 20px;
+  }
+  .turn {
+    scroll-margin-top: 116px; /* 모바일 2단 네비(~98px) + 18px 여백 */
+  }
+}
+
+/* ── 예시 칩 2줄 구조 확정판 (행 분리 DOM) — 이전 그리드 방식 규칙을 전부 덮는다 ── */
+.exwrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.exrow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+@media (max-width: 430px) {
+  .exwrap {
+    display: flex; /* 구 그리드 규칙 무효화 */
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: calc(100% + 32px);
+    margin: 18px -16px 0;
+    padding: 4px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+  }
+  .exwrap .chip:nth-child(2n) {
+    transform: none; /* 구 지그재그 규칙 무효화 (행 자체를 밀어서 처리) */
+  }
+  .exrow {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+    width: max-content;
+    padding: 0 40px 0 16px;
+  }
+  .exrow2 {
+    margin-left: 30px; /* 핀터레스트식 지그재그 — 아랫줄만 균일하게 오른쪽으로 */
+  }
+}
+
+/* ── 챗 상품 노출 모바일 최종판: 2줄 가로 스크롤 캐러셀 (사용자 확정) ──
+   파일 끝 선언으로 이전 모바일 .grid 블록들(2열 그리드·1줄 캐러셀)을 전부 덮는다 */
+@media (max-width: 430px) {
+  .grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, auto);
+    grid-template-columns: none;
+    grid-auto-columns: 156px;
+    gap: 16px 10px;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 2px 24px 6px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  }
+  .grid::-webkit-scrollbar {
+    display: none;
+  }
+  .pcard {
+    width: 156px;
+    flex: none;
+    scroll-snap-align: start;
+  }
+  .pcard .thumb {
+    width: 156px;
+    aspect-ratio: 156 / 196;
+    border-radius: 14px;
+  }
+  .pmeta {
+    padding: 7px 2px 0;
+  }
+  .pbrand {
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pname {
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pprice {
+    font-size: 12px;
+  }
+}
+
+/* ── 챗 상품 노출 모바일 최종판: 2열 세로 그리드 (사용자 확정 — 캐러셀 아님).
+   파일 끝 선언으로 이전 모바일 .grid 블록 전부 덮음 ── */
+@media (max-width: 430px) {
+  .grid {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-columns: unset;
+    gap: 18px 10px;
+    width: 100%;
+    margin: 0;
+    padding: 2px 0 6px;
+    overflow-x: visible;
+    overflow-y: visible;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+  .pcard {
+    width: auto;
+    flex: none;
+  }
+  .pcard .thumb {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    border-radius: 14px;
+  }
+  .pmeta {
+    padding: 7px 2px 0;
+  }
+  .pbrand {
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pname {
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pprice {
+    font-size: 12px;
+  }
+}
