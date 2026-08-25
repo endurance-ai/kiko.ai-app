@@ -7,7 +7,8 @@ import {KOREAN_VOCAB} from "@/shared/enums/korean-vocab"
 // v6 에서 product-level 스타일/색/핏 categorical 라벨은 임베딩이 대체.
 // 어드민 필터는 products 컬럼 + brand_nodes.primary_style_node_id + product_embeddings 만 사용.
 
-const PAGE_SIZE = 60
+const DEFAULT_PAGE_SIZE = 60
+const CURATION_PAGE_SIZE = 24
 
 function expandSearchTerms(raw: string): string[] {
   const term = raw.trim().toLowerCase()
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
   const page = Math.max(0, parseInt(searchParams.get("page") || "0") || 0)
   const sanitize = (s: string) => s.replace(/[.,()\\]/g, "")
   const search = sanitize(searchParams.get("search")?.trim() || "")
+  const mode = searchParams.get("mode") || ""
+  const isCurationMode = mode === "curation"
+  const pageSize = isCurationMode ? CURATION_PAGE_SIZE : DEFAULT_PAGE_SIZE
   const category = searchParams.get("category") || ""
   const subcategory = searchParams.get("subcategory") || ""
   const platform = searchParams.get("platform") || ""
@@ -40,6 +44,10 @@ export async function GET(request: NextRequest) {
     .split(",")
     .map((g) => g.trim())
     .filter((g) => g === "men" || g === "women" || g === "unisex")
+  const effectiveGenders =
+    isCurationMode && genders.length === 1 && genders[0] !== "unisex"
+      ? [genders[0], "unisex"]
+      : genders
   const priceMinRaw = parseInt(searchParams.get("priceMin") || "", 10)
   const priceMin = Number.isNaN(priceMinRaw) || priceMinRaw < 0 ? null : priceMinRaw
   const priceMaxRaw = parseInt(searchParams.get("priceMax") || "", 10)
@@ -52,7 +60,7 @@ export async function GET(request: NextRequest) {
   const reviewStatus = searchParams.get("reviewStatus") || "all"
   const sort = searchParams.get("sort") || "newest"
 
-  let orderCol = "created_at"
+  let orderCol = "first_seen_at"
   let orderAsc = false
   switch (sort) {
     case "price_asc": orderCol = "price"; orderAsc = true; break
@@ -83,30 +91,41 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  let query = supabase
-    .from("products")
-    .select(
-      "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, created_at, review_count",
-      {count: "exact"}
-    )
+  const productColumns =
+    "id, brand, brand_node_id, name, price, source_currency, source_price, image_url, platform, category, in_stock, gender, first_seen_at, review_count"
+  const productsTable = supabase.from("products")
+  let query = isCurationMode
+    ? productsTable.select(productColumns)
+    : productsTable.select(productColumns, {count: "exact"})
 
   if (brandIdAllowList) query = query.in("brand_node_id", brandIdAllowList)
+  if (isCurationMode) {
+    query = query
+      .eq("in_stock", true)
+      .not("image_url", "is", null)
+      .neq("image_url", "")
+      .gte("price", 5000)
+  }
   // 서브카테고리는 products.subcategory 직접 컬럼(백필됨, ~11만) 으로 필터
   if (subcategory) query = query.eq("subcategory", subcategory)
   if (stockStatus === "in_stock") query = query.eq("in_stock", true)
   else if (stockStatus === "out_of_stock") query = query.eq("in_stock", false)
   if (search) {
-    const terms = expandSearchTerms(search)
-    const ors = terms.flatMap((t) => {
-      const s = t.replace(/[%,()]/g, "")
-      return [`brand.ilike.%${s}%`, `name.ilike.%${s}%`]
-    })
-    if (ors.length > 0) query = query.or(ors.join(","))
+    if (/^\d+$/.test(search)) {
+      query = query.eq("id", Number(search))
+    } else {
+      const terms = expandSearchTerms(search)
+      const ors = terms.flatMap((t) => {
+        const s = t.replace(/[%,()]/g, "")
+        return [`brand.ilike.%${s}%`, `name.ilike.%${s}%`]
+      })
+      if (ors.length > 0) query = query.or(ors.join(","))
+    }
   }
   if (category) query = query.eq("category", category)
   if (platform) query = query.eq("platform", platform)
   if (brand) query = query.ilike("brand", `%${brand}%`)
-  if (genders.length > 0) query = query.overlaps("gender", genders)
+  if (effectiveGenders.length > 0) query = query.overlaps("gender", effectiveGenders)
   if (priceMin != null) query = query.gte("price", priceMin)
   if (priceMax != null) query = query.lte("price", priceMax)
   if (reviewStatus === "with_reviews") query = query.gt("review_count", 0)
@@ -117,13 +136,15 @@ export async function GET(request: NextRequest) {
 
   // embeddingStatus / featureStatus 필터는 결과 page 에서 post-filter
   // (product_embeddings / product_features 를 PostgREST select 로 JOIN 하기 어렵다)
-  const needsEmbeddingFilter = embeddingStatus !== "all"
-  const needsFeatureFilter = featureStatus !== "all"
+  const needsEmbeddingFilter = !isCurationMode && embeddingStatus !== "all"
+  const needsFeatureFilter = !isCurationMode && featureStatus !== "all"
   if (needsEmbeddingFilter || needsFeatureFilter) {
     query = query.range(0, 1999)
   } else {
-    const from = page * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
+    const from = page * pageSize
+    // 큐레이션 선택기는 정확한 전체 개수를 세지 않고 다음 페이지 존재 여부만 본다.
+    // 한 행을 더 받아 hasMore 를 계산하면 11만 상품 count 와 보강 조회를 피할 수 있다.
+    query = query.range(from, from + pageSize - 1 + (isCurationMode ? 1 : 0))
   }
 
   const {data, count, error} = await query
@@ -133,12 +154,14 @@ export async function GET(request: NextRequest) {
     id: number; brand: string; brand_node_id: number | null; name: string;
     price: number | null; source_currency: string | null; source_price: number | null;
     image_url: string | null; platform: string; category: string | null;
-    in_stock: boolean; gender: string[] | null; created_at: string;
+    in_stock: boolean; gender: string[] | null; first_seen_at: string;
     review_count: number | null;
   }
 
   let rows = (data ?? []) as ProductRow[]
   let totalCount = count ?? 0
+  const hasMore = isCurationMode ? rows.length > pageSize : false
+  if (isCurationMode && hasMore) rows = rows.slice(0, pageSize)
 
   // embeddingStatus / featureStatus post-filter — 두 필터가 동시에 걸릴 수 있으므로
   // 둘 다 적용한 뒤에 한 번만 페이지네이션한다 (중복 slice 방지).
@@ -167,13 +190,15 @@ export async function GET(request: NextRequest) {
       )
     }
     totalCount = rows.length
-    rows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+    rows = rows.slice(page * pageSize, page * pageSize + pageSize)
   }
 
   // 페이지 상품들의 brand_node → style_node 매핑 batch-fetch
-  const brandNodeIds = Array.from(
-    new Set(rows.map((r) => r.brand_node_id).filter((v): v is number => v != null))
-  )
+  const brandNodeIds = isCurationMode
+    ? []
+    : Array.from(
+        new Set(rows.map((r) => r.brand_node_id).filter((v): v is number => v != null))
+      )
   const styleByBrandNode = new Map<number, {code: string; name_en: string}>()
   if (brandNodeIds.length > 0) {
     const {data: brandJoin} = await supabase
@@ -191,7 +216,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 페이지 상품의 embedding / VLM feature 보유 여부 (이미 fetch한 경우 재사용)
-  if (rows.length > 0) {
+  if (!isCurationMode && rows.length > 0) {
     const ids = rows.map((r) => r.id)
     if (!embeddedSet) {
       const {data: embRows} = await supabase
@@ -209,7 +234,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const totalPages = isCurationMode ? null : Math.ceil(totalCount / pageSize)
 
   const result = rows.map((p) => {
     const style = p.brand_node_id != null ? styleByBrandNode.get(p.brand_node_id) ?? null : null
@@ -232,5 +257,16 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  return NextResponse.json({products: result, total: totalCount, page, totalPages})
+  const response = NextResponse.json({
+    products: result,
+    total: isCurationMode ? null : totalCount,
+    page,
+    pageSize,
+    totalPages,
+    hasMore: isCurationMode ? hasMore : page + 1 < (totalPages ?? 0),
+  })
+  if (isCurationMode) {
+    response.headers.set("cache-control", "private, max-age=15, stale-while-revalidate=45")
+  }
+  return response
 }

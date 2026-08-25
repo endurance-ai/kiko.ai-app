@@ -115,8 +115,13 @@ interface SearchRequest {
 
 | 파일 | 역할 |
 |---|---|
-| `scripts/aws/embed_products.py` | **071 rework** — `product_embeddings` 대상 UPSERT. `product_embeddings(is.null)` anti-join 으로 미임베딩 선별. DB_URL/DB_TOKEN (구 SUPABASE_URL fallback). Apple Silicon (mps) 지원 추가. |
+| `scripts/aws/embed_products.py` | **071/110 rework** — `in_stock=true` + `product_embeddings` 부재 상품만 선별하고 canonical `products.image_url`을 임베딩. `images[0]`은 호환용 mirror이며 입력 선택에 사용하지 않는다. DB_URL/DB_TOKEN (구 SUPABASE_URL fallback). |
 | `scripts/aws/launch_embed_batch.sh` | EC2 Spot 런처 — 로컬 실행 이후 불필요하나 파일 유지 |
+
+운영용 `ai-server/scripts/embed_batch_devapp.py`는 404/410 대표 이미지를 DB 갤러리와
+상품 페이지에서 복구한다. 검증된 대체 URL은 먼저 `image_url`로 승격하고 모든 이미지
+필드에서 죽은 URL을 제거한 뒤 임베딩한다. 403/429/5xx/timeout은
+`product_image_failures`에 retryable로 기록하며, 영구 실패는 URL이 바뀔 때까지 격리된다.
 
 ---
 

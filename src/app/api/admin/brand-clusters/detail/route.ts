@@ -107,30 +107,44 @@ export async function GET(request: NextRequest) {
   const {data: allProducts} = await supabase
     .from("products")
     .select(
-      "id, name, image_url, product_url, source_price, source_currency, is_brand_representative, category, color",
+      "id, name, image_url, product_url, source_price, source_currency, is_brand_representative, category",
     )
     .eq("brand_node_id", brandId)
     .limit(2000)
 
   const products = allProducts ?? []
-  const repProducts = products.filter((p) => p.is_brand_representative)
-
-  // 4. rep_images (임베딩과 동일한 source — id ASC 10장)
-  const repImages = repProducts
-    .filter((p) => p.image_url)
+  const repProducts = products
+    .filter((p) => p.is_brand_representative && p.image_url)
     .sort((a, b) => {
-      // numeric or string id 모두 처리
       const ai = typeof a.id === "number" ? a.id : Number.parseInt(String(a.id), 10) || 0
       const bi = typeof b.id === "number" ? b.id : Number.parseInt(String(b.id), 10) || 0
       return ai - bi
     })
     .slice(0, 10)
-    .map((p) => ({
+
+  const repColorByProductId = new Map<string, string>()
+  if (repProducts.length) {
+    const {data: featureRows} = await supabase
+      .from("product_features")
+      .select("product_id, feature_metadata")
+      .in("product_id", repProducts.map((p) => p.id))
+
+    for (const row of featureRows ?? []) {
+      const metadata = row.feature_metadata as Record<string, unknown> | null
+      const primaryColor = metadata?.primary_color
+      if (typeof primaryColor === "string" && primaryColor) {
+        repColorByProductId.set(String(row.product_id), primaryColor)
+      }
+    }
+  }
+
+  // 4. rep_images (임베딩과 동일한 source — id ASC 10장)
+  const repImages = repProducts.map((p) => ({
       product_id: p.id,
       name: p.name ?? null,
       image_url: p.image_url as string,
       product_url: p.product_url ?? null,
-      color: p.color ?? null,
+      color: repColorByProductId.get(String(p.id)) ?? null,
       category: p.category ?? null,
     }))
 

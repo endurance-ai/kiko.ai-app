@@ -14,11 +14,10 @@ Prereqs
     SUPABASE_SERVICE_ROLE_KEY accepted as fallback), (optional) LIMIT
 
 Behavior
-  1. Page through products with NO product_embeddings row (server-side
+  1. Page through in-stock products with NO product_embeddings row (server-side
      PostgREST anti-join: embedded product_embeddings resource filtered
-     is.null, ordered by id — see fetch_pending). Image source per row =
-     images[0] else image_url (images array is NULL for ~34k that still
-     have a valid image_url).
+     is.null, ordered by id — see fetch_pending). Image source per row is the
+     canonical products.image_url; images[0] is only a compatibility mirror.
   2. Download the resolved image URL in parallel (ThreadPool 20).
   3. GPU/CPU batch (64) encode + L2-normalize.
   4. UPSERT into product_embeddings via bulk_update_product_embeddings RPC
@@ -66,12 +65,9 @@ def download_one(client: httpx.Client, pid: int, url: str) -> Optional[tuple[int
 def fetch_pending(sb, page_limit: int) -> list[dict]:
     """Products with no product_embeddings row.
 
-    Image source per row = images[0] if the images array is populated, else
-    the always-present image_url column (text). The `images` array is NULL for
-    ~34k products that nonetheless have a valid image_url, so filtering on
-    `images IS NOT NULL` (prior behavior) silently skipped them — those rows
-    are embeddable via image_url. No image filter here; the caller resolves
-    the source and skips only rows with neither.
+    products.image_url is the serving/search source of truth. Only active
+    products with a canonical URL are useful to the search RPC; out-of-stock
+    products become pending naturally if they are later restocked.
 
     Server-side anti-join: PostgREST embeds the product_embeddings resource as
     a LEFT JOIN and `product_embeddings=is.null` keeps only products that have
@@ -83,8 +79,10 @@ def fetch_pending(sb, page_limit: int) -> list[dict]:
     """
     resp = (
         sb.table("products")
-        .select("id,images,image_url,product_embeddings(product_id)")
+        .select("id,image_url,product_embeddings(product_id)")
         .is_("product_embeddings", "null")
+        .eq("in_stock", True)
+        .not_.is_("image_url", "null")
         .order("id")
         .limit(page_limit)
         .execute()
@@ -138,8 +136,7 @@ def main() -> int:
 
             jobs: list[tuple[int, str]] = []
             for row in rows:
-                imgs = row.get("images") or []
-                src = imgs[0] if imgs and imgs[0] else row.get("image_url")
+                src = row.get("image_url")
                 if not src:
                     total_skipped += 1
                     continue

@@ -138,25 +138,38 @@ def load_target_brands(sb, limit=None):
 
 def gather_signals(sb, brand_name, n=10):
     """products 에서 sample + 색상 분포."""
-    res = (sb.table("products")
-           .select("name, color, category, subcategory")
-           .eq("brand", brand_name)
-           .limit(n)
-           .execute().data)
+    product_data = (sb.table("products")
+                    .select("id, name, category, subcategory")
+                    .eq("brand", brand_name)
+                    .limit(1000)
+                    .execute().data)
 
-    color_data = (sb.table("products").select("color")
-                  .eq("brand", brand_name).limit(1000).execute().data)
-    colors = Counter(c["color"] for c in color_data if c.get("color"))
-    cat_data = (sb.table("products").select("category")
-                .eq("brand", brand_name).limit(1000).execute().data)
-    cats = Counter(c["category"] for c in cat_data if c.get("category"))
+    color_by_product_id = {}
+    product_ids = [p["id"] for p in product_data]
+    for start in range(0, len(product_ids), 200):
+        feature_data = (sb.table("product_features")
+                        .select("product_id, feature_metadata")
+                        .in_("product_id", product_ids[start:start + 200])
+                        .execute().data)
+        for row in feature_data:
+            metadata = row.get("feature_metadata") or {}
+            color = metadata.get("primary_color")
+            if color:
+                color_by_product_id[row["product_id"]] = color
+
+    colors = Counter(color_by_product_id.values())
+    cats = Counter(p["category"] for p in product_data if p.get("category"))
+    samples = [
+        {**p, "color": color_by_product_id.get(p["id"])}
+        for p in product_data[:n]
+    ]
 
     n_total = (sb.table("products").select("id", count="exact", head=True)
                .eq("brand", brand_name).execute().count)
 
     return {
         "n_products": n_total,
-        "samples": res,
+        "samples": samples,
         "color_top5": colors.most_common(5),
         "category_dist": cats.most_common(5),
     }

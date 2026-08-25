@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   const priceMax = Number.isNaN(priceMaxRaw) || priceMaxRaw < 0 ? null : priceMaxRaw
   const sort = searchParams.get("sort") || "newest"
 
-  let orderCol = "created_at"
+  let orderCol = "first_seen_at" // dev #97 에서 created_at → first_seen_at rename
   let orderAsc = false
   switch (sort) {
     case "price_asc": orderCol = "price"; orderAsc = true; break

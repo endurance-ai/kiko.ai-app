@@ -28,7 +28,8 @@ erDiagram
     products {
         bigint id PK "070 uuid→bigserial 전환"
         text category "752 distinct 원시값"
-        text_array images "images[0] 이 임베딩 대상"
+        text image_url "대표/서빙/임베딩 SOT"
+        text_array images "images[0]은 image_url mirror"
         bigint brand_node_id FK
         bool in_stock
     }

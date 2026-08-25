@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
   // RPC 는 p.subcategory 만 리턴 (project-wide NULL). 우리가 category/gender 를
   // products 에서, color 를 product_features(VLM primary_color) 에서 fetch 해
   // augment row 를 채운다. products.material 은 migration 079 에서 드롭됐고
-  // products.color 는 product_features 로 이관됐다 (2026-07-29).
+  // products.color 는 product_features 로 이관된 뒤 migration 107 에서 제거됐다.
   const productIds = rows.map((r) => r.id)
   const brandsRaw = Array.from(new Set(rows.map((r) => r.brand)))
   const brandsLower = Array.from(new Set(rows.map((r) => r.brand.toLowerCase())))
