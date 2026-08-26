@@ -1,5 +1,6 @@
 import type {Metadata} from "next"
 import Nav from "./_components/Nav"
+import ViewportVar from "./_components/ViewportVar"
 import AmplitudeInit from "@/components/AmplitudeInit"
 import styles from "./chat.module.css"
 
@@ -34,6 +35,7 @@ export const metadata: Metadata = {
 export default function ChatShellLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.root}>
+      <ViewportVar />
       <AmplitudeInit />
       <Nav />
       {children}
