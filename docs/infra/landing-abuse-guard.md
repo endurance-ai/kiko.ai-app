@@ -125,17 +125,44 @@ UI 영향 없음 — `chat/page.tsx` 의 `capReached` 는 `cap_reached` **이벤
 
 앱/웹 경로의 일일 캡은 2026-08-20(`91a8c1a`) 이후 **발동하지 않고 있었다** — 쓰기는
 `kiko:cap:{session_chat_id}`, 읽기는 `kiko:cap:{user_chat_id}` 로 갈려 있었다.
-ai-server PR #235 가 이걸 사람 기준으로 고친다.
+ai-server PR #235 가 이걸 사람 기준으로 고쳤다.
 
-**순서를 반드시 지킬 것:**
+**2026-08-26 실측 (dev-ai)**
 
-1. 위 tier 승격 (랜딩 계정 → `developer`)
-2. dev-ai `.env` 의 `DAILY_TOKEN_CAP_ENABLED` / `CAP_TIER_FREE` 실값 확인
+캡 설정은 `.env`(`/home/ec2-user/docker/.env`)와 컨테이너 주입 env 어디에도 없다
+→ **코드 기본값이 적용된다**: `DAILY_TOKEN_CAP_ENABLED=True`, `CAP_TIER_FREE=500_000`.
+즉 캡은 켜져 있었고, 안 걸린 원인은 키 불일치 하나뿐이었다.
+
+```
+kiko:cap:* 키 개수            : 50        ← 대화마다 하나. 증가는 정상 동작 중
+kiko:cap:2542335457077839490  : (nil)     ← 계정 키. 읽는 곳. 비어 있음
+50개 합계                     : 1,739,905 토큰 (free 캡 500K 의 3.5배)
+평균/키                       : 34,798    최대/키: 91,882
+```
+
+하루 174만 토큰을 쓰고도 개별 키가 92K를 못 넘어 캡에 닿지 않았다.
+
+```bash
+# 재현: dev-ai
+cd /home/ec2-user/docker && REDIS_AUTH=$(grep -E "^REDIS_AUTH=" .env | cut -d= -f2-)
+docker compose exec -T redis sh -lc "redis-cli -a \"$REDIS_AUTH\" --no-auth-warning -n 1 \
+  --scan --pattern 'kiko:cap:*' | while read k; do redis-cli -a \"$REDIS_AUTH\" \
+  --no-auth-warning -n 1 GET \$k; done" | awk '{n++;s+=$1} END{print n" keys, "s" tokens"}'
+```
+
+**배포 순서 (지킬 것)**
+
+1. 위 tier 승격 (랜딩 계정 → `developer`) — **2026-08-26 완료**
+2. dev-ai 캡 설정 실값 확인 — **2026-08-26 완료** (켜짐 / free 500K)
 3. ai-server PR #235 머지 → 배포
 
-1번을 건너뛰고 3번을 먼저 하면 랜딩 방문자 전원이 한 계정을 공유하므로 하루 ~10검색만에
-`cap_reached` 로 막힌다. 그리고 3번 배포 시점부터 **일반 앱 free 유저에게도 캡이 실제로
-켜진다** (8/20 이후 사실상 무제한이었음).
+1번을 건너뛰고 3번을 먼저 하면 랜딩 방문자 전원이 한 계정을 공유하므로 하루 ~14검색만에
+`cap_reached` 로 막힌다.
+
+> ⚠️ 3번 배포 시점부터 **일반 앱 free 유저에게도 캡이 실제로 켜진다** — 하루 500K,
+> 실측 평균 35K/턴 기준 약 14검색. 8/20 이후 사실상 무제한이었으므로 체감이 급변한다.
+> 아울러 `chat/page.tsx` 의 cap 모달은 이때 처음 유저에게 노출되는데, "앱에서 열기"
+> CTA 가 `href="#"` 로 미배선이고 문구도 "카피 드래프트 — 확정 전 임시" 상태다.
 
 ## 4. 엣지 — AWS WAF (미적용, 필요 시)
 
