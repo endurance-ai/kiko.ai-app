@@ -186,6 +186,19 @@ export default function ExplorePage() {
           </div>
         ))}
       </div>
+
+      {/* 스크롤 힌트 — SF Symbols chevron.compact.down 지오메트리 재현.
+          히어로 아래 카테고리 파인더가 접혀 있다는 신호 + 탭 시 스무스 스크롤 */}
+      <button
+        type="button"
+        className={styles.scrollHint}
+        aria-label="카테고리로 찾기로 이동"
+        onClick={() => document.getElementById("finder")?.scrollIntoView({ behavior: "smooth" })}
+      >
+        <svg width="30" height="12" viewBox="0 0 30 12" fill="none" aria-hidden="true">
+          <path d="M2.5 2.5L15 9.5L27.5 2.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
     </section>
 
     {/* nav(100px) 아래로 스크롤 걸리도록 여유를 준 anchor — daydream: 히어로=풀뷰포트 컴포저,

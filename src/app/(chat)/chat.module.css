@@ -141,6 +141,7 @@
 
 /* ── 히어로 ── */
 .hero {
+  position: relative; /* .scrollHint absolute 기준 */
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 28px;
@@ -1727,18 +1728,19 @@
   }
 }
 
-/* ── 예시 칩 2줄 구조 확정판 (행 분리 DOM) — 이전 그리드 방식 규칙을 전부 덮는다 ── */
+/* ── 예시 칩 구조 확정판 — 데스크톱: 행 경계 없이 중앙 정렬 자연 랩(칩 9개가 폭 따라 균형 줄바꿈),
+   모바일(430 이하): 행 분리 DOM으로 2줄 가로 스크롤 지그재그 ── */
 .exwrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.exrow {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.exrow {
+  display: contents; /* 데스크톱은 행 경계 제거 — exwrap 이 전체를 한 흐름으로 랩 */
 }
 @media (max-width: 430px) {
   .exwrap {
@@ -1758,6 +1760,7 @@
     transform: none; /* 구 지그재그 규칙 무효화 (행 자체를 밀어서 처리) */
   }
   .exrow {
+    display: flex; /* 데스크톱 contents 무효화 */
     flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 8px;
@@ -1936,4 +1939,25 @@
     gap: 10px;
     padding: 10px 12px 10px 14px;
   }
+}
+
+/* ── 스크롤 힌트 (chevron.compact.down) — 히어로 하단 중앙, 부드러운 플로팅 ── */
+.scrollHint {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--gray, #aeaeb2);
+  padding: 10px 14px; /* 터치 타깃 확보 */
+  cursor: pointer;
+  animation: hintFloat 2.2s ease-in-out infinite;
+}
+@keyframes hintFloat {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrollHint { animation: none; }
 }
