@@ -30,6 +30,12 @@
 | `PROXY_HOST` / `PROXY_PORT` / `PROXY_USER` / `PROXY_PASS` | Instagram 스크래퍼 undici ProxyAgent | 미설정 시 직접 연결 |
 | `LOG_LEVEL` | pino 로그 레벨 | 기본 `info` |
 | `EVAL_BASE_URL` | 평가 스크립트 (`scripts/eval-*.ts`) 의 타깃 URL | — |
+| `KIKO_AI_TOKEN` | 랜딩(/explore·/chat)의 `/api/chat/stream`·`/api/product/[id]` 가 ai-server 에 붙일 때 쓰는 서버측 bearer (ai-server JWT). **익명 방문자 전원이 이 토큰 하나를 공유한다** | 미설정 시 `/api/chat/stream` 이 501 `live chat not configured` |
+| `KIKO_AI_BASE` | 위 프록시의 업스트림 base URL | 기본 `https://dev-ai.kikoai.me` |
+| `CHAT_RATE_ENABLED` | `/api/chat/stream` 레이트리밋 킬스위치. `false` 면 게이트 전체 우회 | 기본 `true` |
+| `CHAT_RATE_PER_MIN` | IP 당 분당 요청 (`0` = 끔) | 기본 `5` |
+| `CHAT_RATE_PER_HOUR` | IP 당 시간당 요청 (`0` = 끔) | 기본 `60` |
+| `CHAT_RATE_DAILY_GLOBAL` | 랜딩 전체 하루 요청 예산, KST 자정 리셋 (`0` = 끔) | 기본 `800` |
 
 ## 자동/시스템
 
