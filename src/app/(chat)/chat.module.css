@@ -616,6 +616,10 @@
   animation: pop 0.35s var(--spring);
 }
 @media (max-width: 760px) {
+  /* 모바일 = 풀스크린 시트 — 딤 백드롭 불필요. 사파리 하단 바 틈으로 회색 띠 비치던 문제 */
+  .pdp {
+    background: transparent;
+  }
   .pdpSheet {
     max-width: 100%;
     height: 100vh;
@@ -1856,5 +1860,73 @@
   }
   .pprice {
     font-size: 12px;
+  }
+}
+
+/* ── 스트림 실패 배너 — 모바일 Banner 이식 (컴포저 위 플로팅, 다크 글래스, 에러 우선) ── */
+.errBanner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 132px; /* 컴포저(.dock) 바로 위 */
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px 12px 18px;
+  border-radius: 18px;
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 0.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  animation: pop 0.3s var(--spring);
+}
+.errBannerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.errBannerText strong {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.errBannerText span {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12.5px;
+}
+.errBannerRetry {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: #fff;
+  color: #1c1c1e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.errBannerRetry:active {
+  transform: scale(0.96);
+}
+.errBannerClose {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px;
+  line-height: 1;
+}
+@media (max-width: 430px) {
+  .errBanner {
+    bottom: 108px;
+    gap: 10px;
+    padding: 10px 12px 10px 14px;
   }
 }

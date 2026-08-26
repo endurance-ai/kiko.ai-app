@@ -81,6 +81,12 @@ function ChatPageInner() {
   const [capReached, setCapReached] = useState(() => getChatStore().capReached)
   // 모달 자체는 닫을 수 있지만(스토어에 저장 안 함), 컴포저 잠금(capReached)은 유지된다.
   const [capModalOpen, setCapModalOpen] = useState(false)
+  // 스트림 실패 배너 (모바일 Banner 문법: 컴포저 위 플로팅, 에러 우선, 다시 시도 액션)
+  const [errorBanner, setErrorBanner] = useState<{
+    title: string
+    retryQuery: string
+    retryCallback?: { data: string; label: string }
+  } | null>(null)
 
   const initializedRef = useRef(false)
   const mountedRef = useRef(true)
@@ -147,6 +153,7 @@ function ChatPageInner() {
     setChatStore({ turnCounter: turnCounterRef.current })
     applyTurns([...getChatStore().turns, turn])
     setDockValue("")
+    setErrorBanner(null)
 
     // 계측: 검색 제출 = search_query (JTBD 검증 핵심 KPI, 모바일 동일 이벤트명).
     // 실제 스트림 제출 지점 한 곳에서만 발사 — explore 핸드오프도 여기로 수렴해 이중 카운트 없음.
@@ -180,7 +187,10 @@ function ChatPageInner() {
       },
       // 완료 시 브랜드 라운드로빈 재배열 — 스트리밍 도착 순서(브랜드 뭉침)를 한 번에 정리
       onDone: () => patchTurn(id, (t) => ({ streamDone: true, products: interleaveByBrand(t.products) })),
-      onError: (detail) => patchTurn(id, { streamDone: true, error: detail }),
+      onError: (detail) => {
+        patchTurn(id, { streamDone: true, error: detail })
+        if (mountedRef.current) setErrorBanner({ title: detail, retryQuery: query, retryCallback: callback })
+      },
     }
 
     const driver = USE_LIVE ? startChatStream : startMockChatStream
@@ -462,6 +472,35 @@ function ChatPageInner() {
           )
         })}
       </section>
+
+      {/* 스트림 실패 배너 — 모바일 Banner 이식: 컴포저 위 플로팅 다크 서피스 + 다시 시도 */}
+      {errorBanner && (
+        <div className={styles.errBanner} role="alert">
+          <div className={styles.errBannerText}>
+            <strong>{errorBanner.title}</strong>
+            <span>다시 시도해주세요</span>
+          </div>
+          <button
+            type="button"
+            className={styles.errBannerRetry}
+            onClick={() => {
+              const { retryQuery, retryCallback } = errorBanner
+              setErrorBanner(null)
+              submit(retryQuery, retryCallback)
+            }}
+          >
+            다시 시도
+          </button>
+          <button
+            type="button"
+            className={styles.errBannerClose}
+            aria-label="닫기"
+            onClick={() => setErrorBanner(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className={styles.dock}>
         {/* 핀 선택 시 컴포저 위 칩 행 — 핀 칩(썸네일+이름+해제) + 크리틱 칩 (모바일 문법) */}
