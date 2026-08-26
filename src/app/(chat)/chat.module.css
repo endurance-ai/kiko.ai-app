@@ -145,7 +145,8 @@
   margin: 0 auto;
   padding: 0 28px;
   min-height: calc(100vh - 80px); /* nav 80px */
-  min-height: calc(100dvh - 80px); /* 인앱 브라우저(인스타·디코): vh 과대계산으로 히어로 밀림 → 실가시 높이 기준 */
+  min-height: calc(100dvh - 80px);
+  min-height: calc(var(--vvh, 100dvh) - 80px); /* --vvh = JS 실측 가시 높이(인앱 웹뷰 대응, ViewportVar) */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1368,6 +1369,7 @@
   .hero {
     min-height: calc(100vh - 90px);
     min-height: calc(100dvh - 90px);
+    min-height: calc(var(--vvh, 100dvh) - 90px); /* --vvh = JS 실측 가시 높이 — 인앱 웹뷰에서도 사파리와 동일 렌더 */
   }
 }
 
@@ -1434,6 +1436,7 @@
   .headline {
     font-size: 31px;
     line-height: 1.22;
+    margin-bottom: 5px; /* 서브라인과 더 밀착 (사용자 확정) */
   }
   .subline {
     font-size: 12.5px;
