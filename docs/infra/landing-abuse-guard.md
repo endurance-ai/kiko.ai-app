@@ -63,33 +63,79 @@ ECR_REGISTRY=717740918281.dkr.ecr.ap-northeast-2.amazonaws.com \
 
 ## 3. 일일 토큰 캡 — 랜딩 계정은 캡 밖
 
-ai-server 의 일일 토큰 캡(SPEC-DAILY-TOKEN-CAP-001)은 tier 를 Redis 가 아니라
-**DB `ai.user_profiles.tier`** 에서 읽는다(`chat_service.py` `_get_app_user_tier`).
-랜딩 계정을 `developer` 로 두면 `CAP_TIER_DEVELOPER=0` → 무제한이 되고,
-실제 비용 상한은 위 `CHAT_RATE_DAILY_GLOBAL` 이 맡는다.
+### 랜딩 공유 계정 (2026-08-26 실측)
+
+`KIKO_AI_TOKEN` 의 JWT `sub` 로 `GET https://dev-ai.kikoai.me/v1/me` 를 조회한 결과:
+
+| 필드 | 값 |
+|---|---|
+| `user_id` | `634830a0-db01-4682-a8b2-9a41024e1c71` |
+| `provider` | `dev` (소셜 로그인 아님 — 실제 사용자 계정이 아니다) |
+| `email` | `web-landing-test@kiko.dev` |
+| `display_name` | `Web Landing Test` |
+| `created_at` | 2026-08-24 22:11 KST |
+| `tier` | `free` |
+
+랜딩 전용 계정이다. 이 1행을 `developer` 로 올려도 다른 계정에는 영향이 없다.
+캡 읽기 키는 `kiko:cap:2542335457077839490` (`_user_id_to_chat_id` 파생).
+
+> ⏰ **토큰 만료 2026-08-31 22:11 KST** (발급 8/24 + 7일). 만료되면 랜딩 챗이 401 로
+> 죽고 사용자에겐 에러 배너만 뜬다. 랜딩을 계속 열어둘 거면 재발급 + 만료 연장 필요.
+
+### tier 승격
+
+`get_app_cap_status` 는 tier 를 Redis 가 아니라 **DB `ai.user_profiles.tier`** 에서 읽는다
+(`chat_service._get_app_user_tier`). 따라서 `/debug/cap/tier` 엔드포인트가 아니라 DB UPDATE 다.
+`developer` 는 `_tier_cap` 에서 `CAP_TIER_DEVELOPER=0` → 무제한이고, migration
+`0017_allow_developer_tier.py` 가 CHECK 제약에 이미 포함시켜 두었다(내부 개발자 grant 용도).
 
 ```bash
-# 1) 랜딩 계정 user_id — KIKO_AI_TOKEN 의 JWT payload.sub (토큰 자체는 출력하지 않는다)
 ssh -i ~/Desktop/aws-infra/kikoai-key.pem ec2-user@15.165.107.28
 cd /home/ec2-user
-sudo docker compose exec -T app printenv KIKO_AI_TOKEN \
-  | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)["sub"])'
 
-# 2) tier 를 developer 로
-sudo docker compose exec -T db psql -U postgres -d kikoai \
-  -c "UPDATE ai.user_profiles SET tier='developer' WHERE user_id='<uuid>';"
+# 1) 현재 상태 + 영향 범위 확인
+sudo docker compose exec -T db psql -U postgres -d kikoai -c \
+  "SELECT tier, count(*) FROM ai.user_profiles GROUP BY tier ORDER BY 2 DESC;"
 
-# 3) 검증 — /explore 에서 검색 1회 → 첫 SSE `session` 이벤트에
-#    daily_cap: 0, cap_remaining: null
+# 2) dry-run — "UPDATE 1" 이어야 한다
+sudo docker compose exec -T db psql -U postgres -d kikoai <<'SQL'
+BEGIN;
+UPDATE ai.user_profiles SET tier='developer', updated_at=now()
+WHERE user_id='634830a0-db01-4682-a8b2-9a41024e1c71';
+ROLLBACK;
+SQL
+
+# 3) 확정
+sudo docker compose exec -T db psql -U postgres -d kikoai -c \
+  "UPDATE ai.user_profiles SET tier='developer', updated_at=now() \
+   WHERE user_id='634830a0-db01-4682-a8b2-9a41024e1c71';"
+
+# 되돌리기
+#   UPDATE ai.user_profiles SET tier='free', updated_at=now() WHERE user_id='634830a0-...';
 ```
+
+검증: `/explore` 에서 검색 1회 → 첫 SSE `session` 이벤트에 `daily_cap: 0`, `cap_remaining: null`.
+UI 영향 없음 — `chat/page.tsx` 의 `capReached` 는 `cap_reached` **이벤트**로만 켜지고
+`session` 의 `daily_cap` 값은 보지 않는다.
 
 `CAP_TIER_FREE` 를 올리는 방법은 쓰지 않는다 — Telegram·모바일의 모든 free 유저에게
 같이 적용되어 blast radius 가 랜딩 밖으로 샌다.
 
-> ⚠️ 알려진 버그: 앱/웹 경로의 일일 캡은 현재 **inert** 하다. `react_loop` 는
-> `kiko:cap:{session_chat_id}` 에 더하는데(`chat_service.py` 가 `InputState.chat_id` 로
-> session 파생 id 를 넘김) 읽기는 `kiko:cap:{user_chat_id}` 다. 세션마다 새 키가 생기고
-> 아무도 읽지 않는다. 이걸 고치는 커밋은 위 tier 조정과 **반드시 함께** 나가야 한다.
+### ⚠️ 캡 수정과의 배포 순서
+
+앱/웹 경로의 일일 캡은 2026-08-20(`91a8c1a`) 이후 **발동하지 않고 있었다** — 쓰기는
+`kiko:cap:{session_chat_id}`, 읽기는 `kiko:cap:{user_chat_id}` 로 갈려 있었다.
+ai-server PR #235 가 이걸 사람 기준으로 고친다.
+
+**순서를 반드시 지킬 것:**
+
+1. 위 tier 승격 (랜딩 계정 → `developer`)
+2. dev-ai `.env` 의 `DAILY_TOKEN_CAP_ENABLED` / `CAP_TIER_FREE` 실값 확인
+3. ai-server PR #235 머지 → 배포
+
+1번을 건너뛰고 3번을 먼저 하면 랜딩 방문자 전원이 한 계정을 공유하므로 하루 ~10검색만에
+`cap_reached` 로 막힌다. 그리고 3번 배포 시점부터 **일반 앱 free 유저에게도 캡이 실제로
+켜진다** (8/20 이후 사실상 무제한이었음).
 
 ## 4. 엣지 — AWS WAF (미적용, 필요 시)
 
