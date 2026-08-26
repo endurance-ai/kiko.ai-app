@@ -46,6 +46,16 @@
           }
         ],
         "matcher": "Write|Edit|Bash"
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/apple/inject.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -58,6 +68,16 @@
           }
         ],
         "matcher": "Write|Edit"
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/apple/audit.py\"",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "Stop": [
@@ -67,6 +87,15 @@
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/moai/handle-stop.sh\"",
             "timeout": 5,
             "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/apple/gate.sh\"",
+            "timeout": 10
           }
         ]
       }
@@ -509,8 +538,8 @@
     ]
   },
   "attribution": {
-    "commit": "\ud83d\uddff MoAI <email@mo.ai.kr>",
-    "pr": "\ud83d\uddff MoAI <email@mo.ai.kr>"
+    "commit": "🗿 MoAI <email@mo.ai.kr>",
+    "pr": "🗿 MoAI <email@mo.ai.kr>"
   },
   "enableAllProjectMcpServers": false,
   "respectGitignore": true,
