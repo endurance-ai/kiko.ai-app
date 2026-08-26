@@ -6,7 +6,8 @@ import styles from "./chat.module.css"
 // 광고 랜딩 탭 타이틀·미리보기 — 어드민(root layout)의 "kiko.ai Admin"을 랜딩 스코프에서 덮어쓴다.
 // 파비콘·OG 이미지는 kikoai.me(마케팅 원페이저)가 서빙 — 랜딩은 kikoai.me 도메인으로만 광고 유입.
 const LANDING_TITLE = "Kiko | AI-Powered Fashion Discovery Platform"
-const LANDING_DESC = "구경하다 보면 취향이 보여요. Kiko가 스타일, 브랜드, 가격으로 딱 맞는 옷을 찾아드립니다."
+const LANDING_DESC =
+  "Kiko is a curated, personalized fashion discovery platform, bringing style search, visual inspiration, and shoppable pieces from 5,000+ fashion brands in one place."
 export const metadata: Metadata = {
   title: LANDING_TITLE,
   description: LANDING_DESC,

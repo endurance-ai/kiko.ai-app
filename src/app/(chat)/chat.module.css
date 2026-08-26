@@ -269,6 +269,8 @@
 .sendbtn {
   width: 42px;
   height: 42px;
+  flex: 0 0 auto; /* 플렉스 행에서 짜부/스트레치 방지 — 항상 정원 유지 */
+  align-self: center;
   border-radius: 50%;
   border: 0;
   background: var(--gray2);
@@ -1588,7 +1590,7 @@
   /* 앱 PDP 문법: 히어로 이미지 풀블리드(시트 폭 전체), cover 로 꽉 채움 */
   .pdpGallery {
     width: calc(100% + 32px);
-    margin: 0 -16px;
+    margin: -16px -16px 0; /* 상단도 뚫어 시트 패딩 흰 띠 제거 */
     height: auto;
     aspect-ratio: 4/5;
     border-radius: 0;
