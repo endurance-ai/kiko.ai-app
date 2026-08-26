@@ -112,3 +112,8 @@ pnpm test:watch   # vitest watch
 - 기본 브랜치: `dev` · 흐름: dev → feature → PR → squash merge
 - `git add -A` 금지, force push 금지
 - **Commit attribution**: MoAI-ADK 표준 적용 (`.claude/settings.json` 의 `attribution.commit/pr` = `🗿 MoAI <email@mo.ai.kr>`). 기존 `Co-Authored-By: Claude` 룰은 폐기 (2026-05-04, MoAI 전면 도입). legacy 백업: `CLAUDE.md.pre-moai`
+## 디자인 규칙 (애플 하네스)
+- 모든 UI/화면/컴포넌트 설계·구현은 `apple-designer` 에이전트로 위임한다. 일반 AI풍 디자인 금지.
+- 애플 정본만 사용: `.claude/skills/apple-hig`, `apple-design`, `apple-hig/reference/blueprints.md`, `scope.md`.
+- PreToolUse(주입)·PostToolUse(감사)·Stop(게이트) 애플 훅이 UI 파일 편집을 강제 검사한다.
+- 정본 canonical = kikoai-mobile. 수정 후 `scripts/sync-apple-skills.sh <target-repo>`로 동기화.
