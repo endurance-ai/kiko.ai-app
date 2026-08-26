@@ -1370,6 +1370,10 @@
     min-height: calc(100vh - 90px);
     min-height: calc(100dvh - 90px);
     min-height: calc(var(--vvh, 100dvh) - 90px); /* --vvh = JS 실측 가시 높이 — 인앱 웹뷰에서도 사파리와 동일 렌더 */
+    /* 모바일: 콘텐츠가 화면보다 짧아 중앙정렬이 위 공백 ~155pt를 만든다(모든 브라우저 공통).
+       상단 고정 배치 — 어느 브라우저든 동일하게 타이틀이 위에서 시작 (사용자 확정) */
+    justify-content: flex-start;
+    padding-top: 48px;
   }
 }
 
