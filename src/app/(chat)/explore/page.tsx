@@ -12,6 +12,25 @@ import { track } from "@/lib/analytics"
 // fetch 도착 전과 실패 시엔 이 폴백을 유지한다.
 const FRESH_COUNT_FALLBACK = 30000
 
+// 무드 카드 — 클린 화이트 카드 문법. 카드별 컬러 없이 전 카드 동일한 흰 배경(--bg,
+// chat.module.css .moodcard 참조) + 헤어라인 보더(--separator) 위에 검정(--label) 세미볼드
+// 타이틀 + 우상단 ↗ 화살표(탭하면 검색으로 이동한다는 조용한 어포던스)만 얹는다.
+// 탭 시 기존 칩과 동일하게 track("chip_tap") + submit(label) 로 검색 핸드오프(현재 성별 전달).
+// 성별 토글에 따라 아래 두 세트를 교체한다. label은 검색 쿼리 원문 그대로(수정 금지).
+type MoodCard = { label: string }
+const MOOD_CARDS_WOMEN: MoodCard[] = [
+  { label: "닝닝 공항패션st 옷 찾아줘" },
+  { label: "7부 나그랑 티셔츠 찾아줘" },
+  { label: "170cm인데 롱 부츠컷 청바지" },
+  { label: "하객룩 원피스" },
+]
+const MOOD_CARDS_MEN: MoodCard[] = [
+  { label: "코르티스 건호 느낌 바지 찾아줘" },
+  { label: "근육 있는 편인데 딱 붙는 롱슬리브" },
+  { label: "10만원 이하 가을 롱슬리브" },
+  { label: "첫 출근 오피스룩" },
+]
+
 // 타이핑 플레이스홀더 — 한 글자씩 타이핑 → 잠시 유지 → 지우고 다음 문구 (daydream 문법)
 function useTypingPlaceholder(phrases: string[]) {
   const [text, setText] = useState("")
@@ -64,6 +83,7 @@ export default function ExplorePage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const examples = EXAMPLES_BY_GENDER[gender]
   const typingPlaceholder = useTypingPlaceholder(examples)
+  const moodCards = gender === "female" ? MOOD_CARDS_WOMEN : MOOD_CARDS_MEN
   const [freshCount, setFreshCount] = useState(FRESH_COUNT_FALLBACK)
 
   useEffect(() => {
@@ -105,16 +125,10 @@ export default function ExplorePage() {
     <>
     <section className={styles.hero}>
       <h1 className={styles.headline}>
-        5,000+ 패션 브랜드를
+        원하는 스타일,
         <br />
-        채팅 하나로
+        가장 쉽게 찾으세요
       </h1>
-      {/* 신뢰 서브라인 (직행 패턴: 타이틀 아래 라이브 수치) — 오늘 날짜 + 최근 24h 갱신 상품 실측.
-          자정 직후 SSR/CSR 날짜가 어긋날 수 있어 suppressHydrationWarning */}
-      <p className={styles.subline} suppressHydrationWarning>
-        {new Date().getMonth() + 1}월 {new Date().getDate()}일, 가장 신선한 상품 업데이트{" "}
-        {freshCount.toLocaleString("ko-KR")}개
-      </p>
       <div className={styles.seg}>
         <button
           type="button"
@@ -132,13 +146,35 @@ export default function ExplorePage() {
         </button>
       </div>
 
+      {/* 존1 = 발견: 히어로 + 성별 + 핵심 칩 4개(주 CTA, 닝닝 포함). 집중되게 4개만.
+          나머지 예시는 컴포저 아래에. 성별 토글로 세트 교체, 탭 = 검색 핸드오프 */}
+      <div className={styles.exwrap}>
+        {moodCards.map((c) => (
+          <button
+            key={c.label}
+            className={`${styles.chip} ${styles.chipGlass}`}
+            type="button"
+            onClick={() => {
+              track("chip_tap", { label: c.label, gender }) // 계측: 기존 칩과 동일 이벤트
+              submit(c.label)
+            }}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 존2 = 직접 검색: 작은 리드인 + 세컨드 타이틀이 컴포저(대화형 자유 검색)를 안내한다 */}
+      <p className={styles.subheadLead}>찾는 게 없나요? 그러면..</p>
+      <h2 className={styles.subhead}>원하는 스타일을 말해보세요</h2>
+
       <div className={styles.askwrap}>
         <BorderBeam
           size="pulse-outside"
           colorVariant="sunset"
           theme="light"
           duration={4.5}
-          strength={0.75}
+          strength={0.9}
           borderRadius={24}
         >
           <div className={styles.askbox}>
@@ -164,28 +200,6 @@ export default function ExplorePage() {
             </div>
           </div>
         </BorderBeam>
-      </div>
-
-      {/* 예시 칩 2줄 — 명시적 행 분리: 행 안 간격이 항상 균일 (그리드 컬럼 방식은
-          칩 폭이 제각각이라 간격이 틀어짐). 모바일에선 두 줄이 함께 가로 스크롤 */}
-      <div className={styles.exwrap}>
-        {[examples.slice(0, 4), examples.slice(4)].map((row, ri) => (
-          <div key={ri} className={`${styles.exrow} ${ri === 1 ? styles.exrow2 : ""}`}>
-            {row.map((q) => (
-              <button
-                key={q}
-                className={`${styles.chip} ${styles.chipGlass}`}
-                type="button"
-                onClick={() => {
-                  track("chip_tap", { label: q, gender }) // 계측: JTBD 예시 칩 반응
-                  submit(q)
-                }}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        ))}
       </div>
 
       {/* 스크롤 힌트 — SF Symbols chevron.compact.down 지오메트리 재현.
