@@ -297,14 +297,14 @@
   transform: scale(0.9);
 }
 
-/* 예시 칩 */
+/* 예시 칩 → 2×2 직사각 셀 그리드 (무게감) */
 .exwrap {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  justify-content: center;
   margin-top: 0;
-  max-width: 760px;
+  width: 100%;
+  max-width: 720px; /* 컴포저 폭에 맞춤 */
 }
 
 /* 예시 칩 — 흰 글래스(아웃라인): 회색 채움이면 컴포저보다 무거워져 위계 역전
@@ -320,23 +320,26 @@
   opacity: 0.45;
   pointer-events: none;
 }
+/* 2×2 직사각 셀 — 캡슐 pill 대신 무게감 있는 흰 셀(애플 리스트 셀 톤).
+   컴포저와 동일 헤어라인+그림자, 좌측 정렬 블랙 텍스트, 2줄 허용 */
 .chip {
-  height: 46px; /* 성별칩(seg 총 44px)과 동일 볼륨감 — 세로로 통통하게 */
-  padding: 0 22px; /* 성별칩 버튼 패딩(0 22px)과 통일 */
-  border-radius: var(--pill);
-  /* 흰 배경 + 컴포저(.askbox)와 동일 헤어라인 + 그림자 + 애플 systemBlue 텍스트 */
+  min-height: 64px; /* 무게감 있는 셀 높이 */
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 16px; /* 직사각 소프트 라운드 */
   background: #fff;
   border: 0.5px solid var(--separator); /* 컴포저와 동일 헤어라인 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  color: #007aff; /* Apple systemBlue (iOS light 정본) */
+  color: var(--label); /* 블랙 — 차분하게 */
   font-size: 15px;
-  font-weight: 700; /* [받기] 버튼 bold */
+  font-weight: 600;
   cursor: pointer;
   font-family: var(--sf);
   letter-spacing: -0.006em;
   word-break: keep-all;
-  transition: transform 0.15s, background 0.2s;
-  display: inline-flex;
+  text-align: left;
+  transition: transform 0.15s var(--spring), background 0.2s;
+  display: flex;
   align-items: center;
 }
 .chip:hover {
@@ -1236,8 +1239,8 @@
   }
   /* 칩 시각 높이는 40(스펙 지정), 밀집 배치라 44pt 개별 히트존 대신 gap(10px)으로 오탭 방지 */
   .chip {
-    height: 40px;
-    padding: 0 16px;
+    min-height: 60px;
+    padding: 12px 16px;
     font-size: 14px;
   }
 
