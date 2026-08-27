@@ -375,6 +375,7 @@ function FinderSectionInner({ gender }: { gender: "여성" | "남성" }) {
               <path d="m21 21-4.3-4.3" />
             </svg>
             <input
+              className="amp-unmask"
               type="text"
               placeholder="브랜드 검색"
               value={brandQuery}

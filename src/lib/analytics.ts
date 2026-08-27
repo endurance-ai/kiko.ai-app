@@ -1,4 +1,5 @@
 import * as amp from "@amplitude/analytics-browser"
+import { sessionReplayPlugin } from "@amplitude/plugin-session-replay-browser"
 
 // 웹 랜딩 계측 — 모바일과 같은 이벤트명 재사용, platform:web + UTM + request_id.
 // request_id는 Langfuse 트레이스와 조인하는 상관키.
@@ -12,6 +13,7 @@ export function initAmplitude(): void {
   const key = process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY || "96ba8ecb2b48db88cc5f27bf403798ec"
   if (!key) return
   started = true
+  amp.add(sessionReplayPlugin({sampleRate: 1, privacyConfig: {defaultMaskLevel: "medium"}}))
   amp.init(key, {defaultTracking: true})
 
   const q = new URLSearchParams(location.search)
