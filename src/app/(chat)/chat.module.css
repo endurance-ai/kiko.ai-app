@@ -1943,6 +1943,7 @@
 
 /* ── 스크롤 힌트 (chevron.compact.down) — 히어로 하단 중앙, 부드러운 플로팅 ── */
 .scrollHint {
+  display: none; /* PC는 파인더 인지 가능 — 모바일 전용 (사용자 확정) */
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -1960,4 +1961,15 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .scrollHint { animation: none; }
+}
+
+@media (max-width: 430px) {
+  .scrollHint {
+    display: block;
+    bottom: 48px; /* 히어로 상단 마진(48px)과 대칭 (사용자 확정) */
+  }
+  .scrollHint svg {
+    width: 44px;
+    height: auto;
+  }
 }
