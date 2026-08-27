@@ -157,12 +157,12 @@
 }
 .headline {
   font-family: var(--sf);
-  font-weight: 500;
-  font-size: clamp(36px, 5.4vw, 62px);
+  font-weight: 600;
+  font-size: clamp(44px, 6.6vw, 80px);
   line-height: 1.16;
   letter-spacing: -0.02em;
   text-align: center;
-  margin: 0 0 14px;
+  margin: 0 0 24px; /* 타이틀↔성별 = 성별↔칩(seg 24px)과 동일 간격 */
   max-width: 22ch;
   word-break: keep-all;
   text-wrap: balance;
@@ -182,7 +182,7 @@
   background: var(--fill);
   border-radius: var(--pill);
   padding: 3px;
-  margin: 0 auto 22px;
+  margin: 0 auto 12px; /* 성별↔칩 시각 간격 = 히어로↔성별과 맞춤(칩 그림자·seg fill 여백 보정) */
 }
 .seg button {
   height: 38px;
@@ -227,7 +227,7 @@
   display: flex;
   flex-direction: column;
   border: 0.5px solid var(--separator); /* daydream 1px/.12 상당 — 애플 hairline 로 */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); /* 기본 섀도우 — 글로우는 .askwrap 담당 */
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06); /* 존재감 있는 섀도우 — 칩과 어울리게 */
 }
 .askbox textarea {
   border: 0;
@@ -276,7 +276,7 @@
   align-self: center;
   border-radius: 50%;
   border: 0;
-  background: var(--gray2);
+  background: var(--label); /* 검색 액션 인지도 위해 솔리드 블랙(near-black) — 화살표는 흰색 span */
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -303,15 +303,14 @@
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin-top: 24px;
+  margin-top: 0;
   max-width: 760px;
 }
+
 /* 예시 칩 — 흰 글래스(아웃라인): 회색 채움이면 컴포저보다 무거워져 위계 역전
    (daydream: 칩=가벼운 아웃라인, 컴포저=글로우 포컬) */
 .chipGlass {
-  background: var(--bg);
-  border: 0.5px solid var(--separator);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Elevation.raised */
+  /* .chip이 App Store [받기] 버튼 스타일(그레이+블루)을 담당 — chipGlass는 오버라이드 없음 */
 }
 .chipGlass:hover {
   background: #fbfbfd;
@@ -322,14 +321,16 @@
   pointer-events: none;
 }
 .chip {
-  height: 44px; /* Apple 44pt touch target */
-  padding: 0 20px;
+  height: 46px; /* 성별칩(seg 총 44px)과 동일 볼륨감 — 세로로 통통하게 */
+  padding: 0 22px; /* 성별칩 버튼 패딩(0 22px)과 통일 */
   border-radius: var(--pill);
-  background: var(--fill);
-  border: 0;
-  color: var(--label);
+  /* 흰 배경 + 컴포저(.askbox)와 동일 헤어라인 + 그림자 + 애플 systemBlue 텍스트 */
+  background: #fff;
+  border: 0.5px solid var(--separator); /* 컴포저와 동일 헤어라인 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: #007aff; /* Apple systemBlue (iOS light 정본) */
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 700; /* [받기] 버튼 bold */
   cursor: pointer;
   font-family: var(--sf);
   letter-spacing: -0.006em;
@@ -344,6 +345,7 @@
 .chip:active {
   transform: scale(0.96);
 }
+
 
 /* ── 대화 (결과) ── */
 .convo {
@@ -1171,8 +1173,8 @@
     gap: 10px;
   }
   .headline {
-    font-size: 30px;
-    margin-bottom: 28px;
+    font-size: 38px;
+    margin-bottom: 24px; /* 히어로↔성별 = 성별↔칩과 동일(24px) */
   }
   .askbox {
     min-height: 140px;
@@ -1215,22 +1217,22 @@
     padding-top: 20px;
   }
   .headline {
-    font-size: 26px;
-    margin: 0 0 10px;
+    font-size: 34px;
+    margin: 0 0 20px; /* 히어로↔성별 = 성별↔칩과 동일(20px) */
   }
   .subline {
     font-size: 13px;
     margin: 0 0 20px;
   }
   .seg {
-    margin: 0 auto 16px;
+    margin: 0 auto 12px; /* 성별↔칩 시각 간격 보정 */
   }
   .askbox {
     padding: 18px 18px 0;
     min-height: 130px;
   }
   .exwrap {
-    margin-top: 18px;
+    margin-top: 0;
   }
   /* 칩 시각 높이는 40(스펙 지정), 밀집 배치라 44pt 개별 히트존 대신 gap(10px)으로 오탭 방지 */
   .chip {
@@ -1728,47 +1730,138 @@
   }
 }
 
-/* ── 예시 칩 구조 확정판 — 데스크톱: 행 경계 없이 중앙 정렬 자연 랩(칩 9개가 폭 따라 균형 줄바꿈),
-   모바일(430 이하): 행 분리 DOM으로 2줄 가로 스크롤 지그재그 ── */
+/* ── 무드 카드 4종(2×2 그리드) — 클린 화이트 카드. 페이지 배경(--bg 흰색)과 같은 흰 배경 +
+   헤어라인 보더(--separator, 파일 전역에서 쓰는 표준 iOS separator 토큰 그대로 재사용 —
+   apple-hig SKILL.md §3.3 "시맨틱 시스템 컬러를 쓰고 하드코딩하지 않는다")로만 카드 경계를
+   잡는다. 그 위에 검정(--label) 세미볼드 타이틀 + 우상단 ↗ 화살표(SF Symbol arrow.up.right
+   지오메트리, "탭하면 검색으로 이동"을 조용히 신호)만 얹는다. 이전 medium-gray(--gray2) 배경
+   버전보다 플랫하고(92px) 텍스트는 작아진 대신(18px) 여백은 넉넉하다. 랜드스케이프 직사각
+   타일, 컴포저(.askwrap)와 같은 폭으로 정렬, 탭 시 기존 칩과 동일 검색 핸드오프 ── */
+/* 무드 카드 — Apple iOS 27 실측(blueprints.md) 기준.
+   리스트 행 높이 52pt를 min-height 하한으로, 좌우 인셋 16pt, 본문 17pt(SF Pro),
+   spacing은 8의 배수. 고정 높이 대신 패딩 기반 자동 높이 + flex 중앙정렬이라
+   1줄/2줄 어느 쪽이든 여백이 항상 균일하다. */
+.moodwrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px; /* 8의 배수 그리드 갭 */
+  width: 100%;
+  max-width: 720px; /* 컴포저 폭에 맞춰 정렬 */
+  margin: 0 auto 0;
+}
+
+/* 세컨드 타이틀 — 존2(직접 검색) 안내. 히어로보다 작고 절제된 서브헤드(SF Pro Semibold),
+   칩(존1)과 컴포저 사이에서 두 존을 구분한다 */
+
+/* 존2 리드인 — 세컨드 타이틀 위 작은 회색 안내. 존1(칩)과 크게 벌려 섹션 분리(위 마진이 섹션 간격 담당) */
+.subheadLead {
+  margin: 88px 0 0;
+  font-family: var(--sf);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gray); /* 회색 */
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+@media (max-width: 430px) {
+  .subheadLead { margin-top: 64px; font-size: 14px; }
+}
+
+.subhead {
+  /* 존2(직접 검색) 섹션 타이틀 — 섹션 타이틀 느낌은 주되 히어로보다 확실히 한 단계 작게.
+     존1(칩)과 크게 벌려 섹션을 분리 */
+  margin: 6px 0 36px;
+  font-family: var(--sf);
+  font-size: clamp(28px, 4.4vw, 44px);
+  font-weight: 600;
+  color: var(--label);
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1.18;
+}
+@media (max-width: 430px) {
+  .subhead {
+    font-size: 28px;
+    margin: 6px 0 32px;
+  }
+}
+
+/* 애플 칩 문법(.chip 정본 계승) — 연한 systemGray fill 배경 + 보더/그림자 없음 + 콤팩트.
+   애플의 칩·필터 토큰은 흰 카드가 아니라 채워진(fill) 캡슐형이다. 쿼리가 길어 2줄 허용하되
+   패딩·라디우스는 애플 칩 스케일로 콤팩트하게. */
+.moodcard {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px; /* Apple 최소 터치 타깃 44pt */
+  padding: 12px 16px; /* 애플 칩 패딩 스케일(좌우 16, 상하 12) */
+  border: 0;
+  border-radius: 14px; /* 애플 칩 캡슐 톤 — 2줄이라 완전 pill 대신 소프트 라운드 */
+  cursor: pointer;
+  background: var(--fill); /* systemGray 연한 fill — 애플 칩 정본 배경 */
+  transition: transform 0.15s var(--spring), background 0.15s var(--spring);
+}
+.moodcard:active {
+  transform: scale(0.97);
+  background: var(--fill2, var(--bg2)); /* 눌림 — 한 단계 진한 fill */
+}
+.moodlabel {
+  text-align: left;
+  color: var(--label);
+  font-family: var(--sf);
+  font-size: 15px; /* 애플 칩 텍스트 15pt(.chip 정본) */
+  line-height: 1.3;
+  font-weight: 500; /* SF Pro Medium — 애플 칩 웨이트 */
+  letter-spacing: -0.006em;
+  pointer-events: none;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 430px) {
+  .moodwrap {
+    max-width: none;
+    width: 100%;
+    gap: 8px;
+    margin: 0;
+  }
+  /* 카드 높이·패딩·폰트는 데스크톱과 동일 유지 — Apple 17pt 하한 준수, 좁은 폭에선 2줄로 자연 래핑 */
+}
+
+/* ── 예시 칩 구조 확정판 — 컴포저 아래 하단 영역에 전부 펼치는 랩 클라우드(구조 확정).
+   데스크톱·모바일 공통: 가로 스크롤/행 분리 폐기, flex-wrap 으로 필요한 만큼 여러 줄로
+   중앙 정렬 wrap 해서 모든 칩이 한눈에 보이게 한다. 위치 = 컴포저 바로 아래.
+   top margin 으로 컴포저와의 간격을, 아래 여백은 히어로 하단 패딩이 담당한다 */
 .exwrap {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-.exrow {
-  display: contents; /* 데스크톱은 행 경계 제거 — exwrap 이 전체를 한 흐름으로 랩 */
+  max-width: 720px; /* 컴포저 폭에 맞춰 그 아래로 정렬 */
+  margin: 28px auto 0;
 }
 @media (max-width: 430px) {
   .exwrap {
-    display: flex; /* 구 그리드 규칙 무효화 */
-    flex-direction: column;
+    /* 구 그리드/가로 스크롤 규칙(위 미디어쿼리들) 전부 무효화 — 세로로 wrap 되는 클라우드 */
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: flex-start;
     gap: 8px;
-    width: calc(100% + 32px);
-    margin: 18px -16px 0;
-    padding: 4px 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+    width: auto;
+    max-width: none;
+    margin: 22px 0 0;
+    padding: 0;
+    overflow: visible;
+    mask-image: none;
+    -webkit-mask-image: none;
   }
   .exwrap .chip:nth-child(2n) {
-    transform: none; /* 구 지그재그 규칙 무효화 (행 자체를 밀어서 처리) */
-  }
-  .exrow {
-    display: flex; /* 데스크톱 contents 무효화 */
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 8px;
-    width: max-content;
-    padding: 0 40px 0 16px;
-  }
-  .exrow2 {
-    margin-left: 30px; /* 핀터레스트식 지그재그 — 아랫줄만 균일하게 오른쪽으로 */
+    transform: none; /* 구 지그재그 규칙 무효화 */
   }
 }
 
