@@ -557,6 +557,7 @@ function ChatPageInner() {
             <div className={styles.dockRing}>
             <div className={`${styles.dockIn} ${capReached ? styles.dockInLocked : ""}`}>
               <input
+                className="amp-unmask"
                 placeholder={
                   capReached
                     ? "내일 다시 검색할 수 있어요"

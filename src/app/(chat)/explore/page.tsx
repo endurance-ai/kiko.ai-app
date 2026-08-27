@@ -144,6 +144,7 @@ export default function ExplorePage() {
           <div className={styles.askbox}>
             <textarea
               ref={textareaRef}
+              className="amp-unmask"
               rows={1}
               placeholder={typingPlaceholder}
               value={value}
