@@ -62,8 +62,11 @@ export const CELEBS: Celeb[] = [
           {
             brand: "페인오어플레저",
             name: "Pain or Love 레터링 롱슬리브",
-            image: "/heroes/wonyoung-black-worn.jpg",
-            url: "https://www.musinsa.com/brand/painorpleasure",
+            price: 71100,
+            priceOld: 79000,
+            image:
+              "https://image.msscdn.net/thumbnails/images/goods_img/20240812/4320692/4320692_17237733016992_big.jpg?w=1200",
+            url: "https://www.musinsa.com/products/4320692",
           },
         ],
         recs: [
@@ -346,6 +349,16 @@ export const CELEBS: Celeb[] = [
         sourceHandle: "@aespa",
         items: [
           {
+            brand: "윤세",
+            name: "컷 아웃 슬리브리스 탑 (블랙)",
+            price: 68000,
+            image:
+              "https://image.msscdn.net/thumbnails/images/goods_img/20250320/4921000/4921000_17424397039661_big.jpg?w=1200",
+            url: "https://www.musinsa.com/products/4921000",
+          },
+        ],
+        recs: [
+          {
             id: 660057,
             brand: "nonunt",
             name: "원숄더 탑 블랙",
@@ -353,8 +366,6 @@ export const CELEBS: Celeb[] = [
             image: "https://ecimg.cafe24img.com/pg2165b89402764012/nonunt1212/web/product/big/20260403/ebbaee1adb5630b0b077183200401ca5.jpg",
             url: "https://nonunt.com/product/one-shoulder-top-black/53/category/52/display/1/",
           },
-        ],
-        recs: [
           {
             id: 570295,
             brand: "FANCY CLUB",
