@@ -38,8 +38,6 @@ export type Celeb = {
   looks: Look[]
 }
 
-const px = (h: string) => `https://pbs.twimg.com/media/${h}?format=jpg&name=large`
-
 export const CELEBS: Celeb[] = [
   {
     id: "wonyoung",

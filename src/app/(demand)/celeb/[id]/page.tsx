@@ -171,7 +171,6 @@ function LookSection({
   celebName,
   grad,
   onHeart,
-  onUnlock,
 }: {
   look: Look
   index: number
@@ -179,8 +178,10 @@ function LookSection({
   celebName: string
   grad: string
   onHeart: () => void
-  onUnlock: () => void
 }) {
+  // 훅은 조기 return보다 위에서 무조건 호출 (rules-of-hooks)
+  const [expanded, setExpanded] = useState(false)
+
   // 페이월 룩(teaser) — 형제 룩과 동일한 번호+타이틀 헤더 + 사진.
   // 페이지 하단 전체 그라데이션(PageGate)이 이 섹션을 덮어 "위에서 잘렸다"는 느낌을 준다.
   if (look.teaser) {
@@ -203,7 +204,6 @@ function LookSection({
   // 그리드 = 착용 옷(상단) + 비슷한 옷 전체(recs + moreRecs 합침).
   // 처음 4개만 선노출, 나머지는 더보기/접기로. 실데이터 없으면 스켈레톤 채움.
   const INITIAL = 4
-  const [expanded, setExpanded] = useState(false)
   const alts = [...(look.recs ?? []), ...(look.moreRecs ?? [])]
   const all = [
     ...look.items.map((item) => ({item, worn: true})),
@@ -349,7 +349,6 @@ export default function CelebDetail({params}: {params: Promise<{id: string}>}) {
             celebName={celeb.name}
             grad={celeb.grad}
             onHeart={onHeart}
-            onUnlock={onUnlock}
           />
         ))}
       </div>
