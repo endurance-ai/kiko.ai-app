@@ -5,6 +5,7 @@ import {notFound} from "next/navigation"
 import styles from "../../celeb.module.css"
 import {getCeleb, coverOf, won, type Item, type Look} from "../../_celebs"
 import {useWaitlist} from "../../_Waitlist"
+import {trackCeleb} from "../../_track"
 
 // ── 셀럽 상세 (/celeb/[id]) — Plush식 구조, 룩마다 섹션 ───────────────────────
 // 셀럽 히어로 → [룩: 번호+스타일 타이틀 → 폴라로이드 룩 사진+출처 → 설명 → 제품 그리드(착용옷+비슷한옷 2줄)] × N → 이메일.
@@ -27,7 +28,19 @@ const LOCK = (
 
 // 상품 카드 — 파인더 카드(.card/.thumb/.save/.meta) 1:1 이식. worn=착용 태그.
 // 카드 전체가 구매 페이지로 이동, 하트는 이메일 모달(fake-door).
-function ProductCard({item, worn, onHeart}: {item: Item; worn?: boolean; onHeart: () => void}) {
+function ProductCard({
+  item,
+  worn,
+  onHeart,
+  celebId,
+  lookId,
+}: {
+  item: Item
+  worn?: boolean
+  onHeart: () => void
+  celebId: string
+  lookId: string
+}) {
   const pct =
     item.priceOld && item.price && item.priceOld > item.price
       ? Math.round((1 - item.price / item.priceOld) * 100)
@@ -72,7 +85,21 @@ function ProductCard({item, worn, onHeart}: {item: Item; worn?: boolean; onHeart
     </>
   )
   return item.url ? (
-    <a className={styles.prodCard} href={item.url} target="_blank" rel="noopener noreferrer">
+    <a
+      className={styles.prodCard}
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() =>
+        trackCeleb("product_click", {
+          celeb: celebId,
+          look: lookId,
+          type: worn ? "worn" : "rec", // 착용템 vs 대체품 (A/C 브리지 신호)
+          brand: item.brand,
+          product_id: item.id ?? null,
+        })
+      }
+    >
       {inner}
     </a>
   ) : (
@@ -140,6 +167,7 @@ function LookGallery({photos, alt}: {photos: string[]; alt: string}) {
 function LookSection({
   look,
   index,
+  celebId,
   celebName,
   grad,
   onHeart,
@@ -147,6 +175,7 @@ function LookSection({
 }: {
   look: Look
   index: number
+  celebId: string
   celebName: string
   grad: string
   onHeart: () => void
@@ -213,7 +242,14 @@ function LookSection({
         <>
           <div className={styles.recGrid}>
             {shown.map(({item, worn}) => (
-              <ProductCard key={item.brand + item.name} item={item} worn={worn} onHeart={onHeart} />
+              <ProductCard
+                key={item.brand + item.name}
+                item={item}
+                worn={worn}
+                onHeart={onHeart}
+                celebId={celebId}
+                lookId={look.id}
+              />
             ))}
             {Array.from({length: skeletons}).map((_, n) => (
               <SimilarCardSkeleton key={n} onHeart={onHeart} />
@@ -225,7 +261,10 @@ function LookSection({
             <button
               className={styles.moreBtn}
               type="button"
-              onClick={() => setExpanded((v) => !v)}
+              onClick={() => {
+                if (!expanded) trackCeleb("alts_expand", {celeb: celebId, look: look.id}) // 대체품 더 보려는 신호
+                setExpanded((v) => !v)
+              }}
               aria-expanded={expanded}
             >
               {expanded ? "접기" : "더보기"}
@@ -306,6 +345,7 @@ export default function CelebDetail({params}: {params: Promise<{id: string}>}) {
             key={look.id}
             look={look}
             index={i}
+            celebId={celeb.id}
             celebName={celeb.name}
             grad={celeb.grad}
             onHeart={onHeart}

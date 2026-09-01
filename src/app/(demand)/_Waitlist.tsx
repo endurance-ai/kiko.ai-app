@@ -2,7 +2,7 @@
 
 import {createContext, useCallback, useContext, useEffect, useState} from "react"
 import styles from "./celeb.module.css"
-import {track} from "@/lib/analytics"
+import {trackCeleb} from "./_track"
 import {CELEBS, isEmail} from "./_celebs"
 
 // 애플 스타일 서베이 모달(iOS 시트) — 이메일 + 원하는 셀럽.
@@ -67,6 +67,7 @@ export function WaitlistProvider({children}: {children: React.ReactNode}) {
     setEmail("")
     setDone(false)
     setOpen(true)
+    trackCeleb("waitlist_open", {source: src ?? "cta"}) // 모달 열림(open→lead 전환용)
   }, [])
 
   const close = useCallback(() => setOpen(false), [])
@@ -75,7 +76,7 @@ export function WaitlistProvider({children}: {children: React.ReactNode}) {
   const submit = () => {
     if (!canSubmit) return
     const payload = {source, email: email.trim(), fav: fav.trim()}
-    track("waitlist_lead", payload) // Amplitude 지표
+    trackCeleb("waitlist_lead", payload) // Amplitude 지표
     void saveToGoogleForm(payload) // 구글폼(스프레드시트) 리드 저장
     setDone(true)
   }

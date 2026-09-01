@@ -5,7 +5,7 @@ import Link from "next/link"
 import {BorderBeam} from "border-beam"
 import styles from "../celeb.module.css"
 import chatStyles from "../../(chat)/chat.module.css"
-import {track} from "@/lib/analytics"
+import {trackCeleb} from "../_track"
 import {CELEBS, coverOf} from "../_celebs"
 import {useWaitlist} from "../_Waitlist"
 
@@ -27,16 +27,16 @@ export default function CelebLanding() {
   const [searchValue, setSearchValue] = useState("")
 
   const openModal = (source: string) => {
-    track("cta_click", {source})
+    trackCeleb("cta_click", {source})
     openWaitlist(undefined, source)
   }
   // 검색 컴포저 제출 — 입력한 최애 이름을 모달 fav로 프리필
   const submitSearch = () => {
-    track("cta_click", {source: "search"})
+    trackCeleb("cta_click", {source: "search"})
     openWaitlist(undefined, "search", searchValue.trim() || undefined)
   }
   const scrollToCards = () => {
-    track("cta_click", {source: "hero_browse"})
+    trackCeleb("cta_click", {source: "hero_browse"})
     cardsRef.current?.scrollIntoView({behavior: "smooth", block: "start"})
   }
 
@@ -87,7 +87,7 @@ export default function CelebLanding() {
               key={c.id}
               href={`/celeb/${c.id}`}
               className={styles.card}
-              onClick={() => track("celeb_open", {celeb: c.id})}
+              onClick={() => trackCeleb("celeb_open", {celeb: c.id})}
             >
               <div className={styles.banner} style={bannerSrc ? undefined : {background: c.grad}}>
                 {bannerSrc && (
