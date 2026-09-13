@@ -41,6 +41,14 @@ async function callV2(client: Client | Pool | PoolClient, payload: unknown) {
   return rows[0].result
 }
 
+async function invalidateStale(client: Client | Pool | PoolClient, ids: string[]) {
+  const {rows} = await client.query<{result: Array<Record<string, string>>}>(
+    "SELECT invalidate_stale_product_embeddings_v2($1::jsonb) AS result",
+    [JSON.stringify(ids)],
+  )
+  return rows[0].result
+}
+
 describe.skipIf(!enabled)("image and embedding provenance", () => {
   let pool: Pool
 
@@ -181,28 +189,52 @@ describe.skipIf(!enabled)("image and embedding provenance", () => {
 
   it("applies the separate 123 gate to legacy and direct normal-role writes", async () => {
     await applyTaskMigrations(pool, ["123_gate_legacy_product_embedding_writes.sql"])
-    const id = await insertProduct(pool, "gate")
+    const currentId = await insertProduct(pool, "gate-current")
+    const legacyId = await insertProduct(pool, "gate-legacy")
+    const staleId = await insertProduct(pool, "gate-stale")
+    await callV2(pool, embeddingPayload(currentId, imageA, "1"))
+    await pool.query(
+      `INSERT INTO product_embeddings(
+         product_id, embedding, embedding_model, source_image_url, source_image_revision
+       ) VALUES
+         ($1,$3::halfvec(768),'legacy',NULL,NULL),
+         ($2,$3::halfvec(768),'stale',$4,1)`,
+      [legacyId, staleId, vector, imageB],
+    )
     await withRollback(pool, async (client) => {
       await expect(asRole(client, "ai_user", () => client.query(
         "SELECT bulk_update_product_embeddings($1::jsonb)",
-        [JSON.stringify([{id, embedding: vector, model: "legacy"}])],
+        [JSON.stringify([{id: currentId, embedding: vector, model: "legacy"}])],
       ))).rejects.toThrow(/permission denied/)
-    })
-    await withRollback(pool, async (client) => {
       await expect(asRole(client, "app_user", () => client.query(
         "INSERT INTO product_embeddings(product_id, embedding, embedding_model) VALUES ($1,$2::halfvec(768),'bypass')",
-        [id, vector],
+        [currentId, vector],
       ))).rejects.toThrow(/permission denied/)
-    })
-    await withRollback(pool, async (client) => {
       await expect(asRole(client, "ai_user", () => client.query(
         "INSERT INTO product_embeddings(product_id, embedding, embedding_model) VALUES ($1,$2::halfvec(768),'bypass')",
-        [id, vector],
+        [currentId, vector],
       ))).rejects.toThrow(/permission denied/)
-    })
-    await withRollback(pool, async (client) => {
-      expect(await asRole(client, "ai_user", () => callV2(client, embeddingPayload(id, imageA, "1"))))
-        .toEqual([{id, outcome: "applied"}])
+      await expect(asRole(client, "app_user", () => client.query(
+        "DELETE FROM product_embeddings WHERE product_id=$1",
+        [currentId],
+      ))).rejects.toThrow(/permission denied/)
+
+      expect(await asRole(client, "app_user", () => invalidateStale(
+        client, [legacyId, currentId, staleId, "999999"],
+      ))).toEqual([
+        {id: legacyId, outcome: "invalidated"},
+        {id: currentId, outcome: "current"},
+        {id: staleId, outcome: "invalidated"},
+        {id: "999999", outcome: "missing"},
+      ])
+      expect((await client.query(
+        "SELECT product_id::text AS id FROM product_embeddings ORDER BY product_id",
+      )).rows).toEqual([{id: currentId}])
+
+      expect(await asRole(client, "ai_user", () => callV2(
+        client, embeddingPayload(currentId, imageA, "1"),
+      ))).toEqual([{id: currentId, outcome: "applied"}])
+      expect(await asRole(client, "ai_user", () => invalidateStale(client, []))).toEqual([])
     })
   })
 })

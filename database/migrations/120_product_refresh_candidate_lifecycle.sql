@@ -121,6 +121,19 @@ BEGIN
     ORDER BY 1
   ) keys;
 
+  -- Claims can lock several candidate rows in one transaction. Take every
+  -- existing observation row in the same stable order before processing the
+  -- caller's payload so observation batches cannot invert that row order.
+  PERFORM 1
+  FROM public.product_refresh_candidates c
+  JOIN (
+    SELECT item->>'platform_key' AS platform_key,
+           item->>'identity_key' AS identity_key
+    FROM jsonb_array_elements(p_rows) input(item)
+  ) requested USING (platform_key, identity_key)
+  ORDER BY c.first_seen_at, c.id
+  FOR UPDATE OF c;
+
   FOR v_item IN SELECT item FROM jsonb_array_elements(p_rows) WITH ORDINALITY input(item, ord) ORDER BY ord
   LOOP
     IF jsonb_typeof(v_item) <> 'object'
@@ -252,12 +265,50 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE v_result jsonb;
+DECLARE
+  v_result jsonb;
+  v_maintenance_ids bigint[];
 BEGIN
   IF p_limit IS NULL OR p_max_attempts IS NULL OR p_max_age_hours IS NULL OR p_in_stock_only IS NULL
      OR p_limit < 1 OR p_limit > 1000 OR p_max_attempts < 1 OR p_max_age_hours < 1 THEN
     RAISE EXCEPTION 'invalid claim limits' USING ERRCODE = '22023';
   END IF;
+
+  -- Lock maintenance rows nonblockingly before any update. Later maintenance
+  -- statements only touch this owned set, so a busy stale row cannot defeat
+  -- the final SKIP LOCKED claim or form a wait cycle with an observation batch.
+  SELECT COALESCE(array_agg(candidate.id ORDER BY candidate.first_seen_at, candidate.id), '{}'::bigint[])
+  INTO v_maintenance_ids
+  FROM (
+    SELECT c.id, c.first_seen_at
+    FROM public.product_refresh_candidates c
+    JOIN public.product_refresh_sources s ON s.platform_key = c.platform_key
+    JOIN public.brand_nodes b ON b.id = c.matched_brand_node_id
+    WHERE s.enabled = true
+      AND (p_platform_key IS NULL OR c.platform_key = p_platform_key)
+      AND (NOT p_in_stock_only OR COALESCE(c.raw_product->>'inStock', c.raw_product->>'in_stock') = 'true')
+      AND (p_origin_country IS NULL OR upper(COALESCE(b.wiki->>'origin_country', '')) = upper(p_origin_country))
+      AND (
+        (
+          c.status IN ('discovered','failed','enriching','ready')
+          AND (c.processing_token IS NULL OR c.lease_expires_at <= clock_timestamp())
+          AND (c.raw_observed_at IS NULL OR c.raw_observed_at < clock_timestamp() - make_interval(hours => p_max_age_hours))
+        )
+        OR (
+          c.status IN ('enriching','ready')
+          AND c.processing_token IS NOT NULL
+          AND c.lease_expires_at <= clock_timestamp()
+          AND c.processing_observation_revision IS DISTINCT FROM c.observation_revision
+        )
+        OR (
+          c.status IN ('discovered','failed','enriching','ready')
+          AND c.attempt_count >= p_max_attempts
+          AND (c.processing_token IS NULL OR c.lease_expires_at <= clock_timestamp())
+        )
+      )
+    ORDER BY c.first_seen_at, c.id
+    FOR UPDATE OF c SKIP LOCKED
+  ) candidate;
 
   UPDATE public.product_refresh_candidates
   SET status = 'awaiting_observation', processing_token = NULL, lease_expires_at = NULL,
@@ -269,16 +320,11 @@ BEGIN
           THEN 1 ELSE 0 END, 0),
       last_error_code = 'observation_stale', last_error = 'source observation is missing or stale'
   WHERE status IN ('discovered','failed','enriching','ready')
+    AND id = ANY(v_maintenance_ids)
     AND (processing_token IS NULL OR lease_expires_at <= clock_timestamp())
     AND (raw_observed_at IS NULL OR raw_observed_at < clock_timestamp() - make_interval(hours => p_max_age_hours))
     AND (p_platform_key IS NULL OR platform_key = p_platform_key)
-    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true')
-    AND EXISTS (
-      SELECT 1 FROM public.product_refresh_sources s
-      JOIN public.brand_nodes b ON b.id = product_refresh_candidates.matched_brand_node_id
-      WHERE s.platform_key = product_refresh_candidates.platform_key AND s.enabled = true
-        AND (p_origin_country IS NULL OR upper(COALESCE(b.origin_country,b.country,'')) = upper(p_origin_country))
-    );
+    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true');
 
   -- A lease that expired after its observation generation changed is a stale
   -- attempt. Refund it once while clearing the only token that could refund it.
@@ -294,33 +340,23 @@ BEGIN
       processing_max_age_hours = NULL,
       lease_expires_at = NULL, next_attempt_at = NULL
   WHERE status IN ('enriching','ready')
+    AND id = ANY(v_maintenance_ids)
     AND processing_token IS NOT NULL
     AND lease_expires_at <= clock_timestamp()
     AND processing_observation_revision IS DISTINCT FROM observation_revision
     AND (p_platform_key IS NULL OR platform_key = p_platform_key)
-    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true')
-    AND EXISTS (
-      SELECT 1 FROM public.product_refresh_sources s
-      JOIN public.brand_nodes b ON b.id = product_refresh_candidates.matched_brand_node_id
-      WHERE s.platform_key = product_refresh_candidates.platform_key AND s.enabled = true
-        AND (p_origin_country IS NULL OR upper(COALESCE(b.origin_country,b.country,'')) = upper(p_origin_country))
-    );
+    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true');
 
   UPDATE public.product_refresh_candidates
   SET status = 'blocked', processing_token = NULL, lease_expires_at = NULL,
       processing_observation_revision = NULL, processing_max_age_hours = NULL,
       last_error_code = COALESCE(last_error_code, 'attempts_exhausted')
   WHERE status IN ('discovered','failed','enriching','ready')
+    AND id = ANY(v_maintenance_ids)
     AND attempt_count >= p_max_attempts
     AND (processing_token IS NULL OR lease_expires_at <= clock_timestamp())
     AND (p_platform_key IS NULL OR platform_key = p_platform_key)
-    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true')
-    AND EXISTS (
-      SELECT 1 FROM public.product_refresh_sources s
-      JOIN public.brand_nodes b ON b.id = product_refresh_candidates.matched_brand_node_id
-      WHERE s.platform_key = product_refresh_candidates.platform_key AND s.enabled = true
-        AND (p_origin_country IS NULL OR upper(COALESCE(b.origin_country,b.country,'')) = upper(p_origin_country))
-    );
+    AND (NOT p_in_stock_only OR COALESCE(raw_product->>'inStock', raw_product->>'in_stock') = 'true');
 
   WITH selected AS (
     SELECT c.id
@@ -337,7 +373,7 @@ BEGIN
         OR (c.status IN ('enriching','ready') AND
             (c.processing_token IS NULL OR c.lease_expires_at <= clock_timestamp()))
       )
-      AND (p_origin_country IS NULL OR upper(COALESCE(b.origin_country, b.country, '')) = upper(p_origin_country))
+      AND (p_origin_country IS NULL OR upper(COALESCE(b.wiki->>'origin_country', '')) = upper(p_origin_country))
       AND (p_platform_key IS NULL OR c.platform_key = p_platform_key)
       AND (NOT p_in_stock_only OR COALESCE(c.raw_product->>'inStock', c.raw_product->>'in_stock') = 'true')
     ORDER BY c.first_seen_at, c.id
@@ -555,7 +591,10 @@ BEGIN
   END IF;
   IF v_row.status = 'imported' AND v_row.prepared_observation_revision = p_expected_revision
      AND v_row.imported_product_id IS NOT NULL THEN
-    RETURN jsonb_build_object('outcome','imported','product_id',v_row.imported_product_id::text);
+    RETURN jsonb_build_object(
+      'outcome','imported','product_id',v_row.imported_product_id::text,
+      'write_outcome','unchanged'
+    );
   END IF;
   IF v_row.processing_token IS DISTINCT FROM p_token OR v_row.lease_expires_at IS NULL
      OR v_row.lease_expires_at <= clock_timestamp() OR v_row.status NOT IN ('enriching','ready')
@@ -609,7 +648,10 @@ BEGIN
         processing_max_age_hours = NULL, lease_expires_at = NULL,
         next_attempt_at = NULL, last_error = NULL, last_error_code = NULL
     WHERE id = p_id;
-    RETURN jsonb_build_object('outcome','imported','product_id',v_result->>'id');
+    RETURN jsonb_build_object(
+      'outcome','imported','product_id',v_result->>'id',
+      'write_outcome',v_result->>'outcome'
+    );
   ELSIF v_result->>'outcome' = 'conflicted' THEN
     RETURN jsonb_build_object('outcome','conflicted','product_id',v_result->>'id','code',v_result->>'code');
   END IF;
@@ -636,6 +678,7 @@ DECLARE
   v_candidate public.product_refresh_candidates%ROWTYPE;
   v_product public.products%ROWTYPE;
   v_completed_at timestamptz;
+  v_write_outcome text;
   v_subcategories constant jsonb := '{
     "tops":["t-shirt","shirt","blouse","polo","hoodie","sweatshirt","tank-top","crop-top","henley","camisole","bodysuit","asymmetric-top"],
     "knitwear":["sweater","cardigan","pullover","knit-top","turtleneck","sweater-vest"],
@@ -665,7 +708,10 @@ BEGIN
   IF v_candidate.status = 'imported'
      AND v_candidate.prepared_observation_revision = p_expected_revision
      AND v_candidate.imported_product_id = p_product_id THEN
-    RETURN jsonb_build_object('outcome','imported','product_id',p_product_id::text);
+    RETURN jsonb_build_object(
+      'outcome','imported','product_id',p_product_id::text,
+      'write_outcome','unchanged'
+    );
   END IF;
   IF v_candidate.processing_token IS DISTINCT FROM p_token
      OR v_candidate.lease_expires_at IS NULL
@@ -735,11 +781,14 @@ BEGIN
 
   IF ROW(v_product.category, v_product.subcategory)
      IS DISTINCT FROM ROW(p_category, NULLIF(btrim(p_subcategory),'')) THEN
+    v_write_outcome := 'updated';
     UPDATE public.products
     SET category = p_category,
         subcategory = NULLIF(btrim(p_subcategory),''),
         updated_at = clock_timestamp()
     WHERE id = p_product_id;
+  ELSE
+    v_write_outcome := 'unchanged';
   END IF;
 
   UPDATE public.product_refresh_candidates
@@ -755,7 +804,10 @@ BEGIN
       last_error = NULL,
       last_error_code = NULL
   WHERE id = p_id;
-  RETURN jsonb_build_object('outcome','imported','product_id',p_product_id::text);
+  RETURN jsonb_build_object(
+    'outcome','imported','product_id',p_product_id::text,
+    'write_outcome',v_write_outcome
+  );
 END
 $$;
 

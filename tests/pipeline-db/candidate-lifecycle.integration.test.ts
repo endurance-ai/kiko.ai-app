@@ -2,14 +2,15 @@
 
 import type {Pool} from "pg"
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from "vitest"
-import {applyTaskMigrations, createPipelinePool, resetPipelineData} from "./helpers"
+import {applyTaskMigrations, createPipelinePool, openPipelineClient, resetPipelineData} from "./helpers"
 
 const enabled = Boolean(process.env.PIPELINE_TEST_DATABASE_URL)
 type Json = Record<string, unknown>
 
 async function seed(pool: Pool) {
   const brandId = (await pool.query<{id: string}>(
-    "INSERT INTO brand_nodes(brand_name,origin_country) VALUES ('Candidate Brand','KR') RETURNING id",
+    `INSERT INTO brand_nodes(brand_name,wiki)
+     VALUES ('Candidate Brand','{"origin_country":"KR"}'::jsonb) RETURNING id`,
   )).rows[0].id
   await pool.query(
     "INSERT INTO product_refresh_sources(platform_key,platform_type,base_url) VALUES ('candidate-shop','cafe24','https://shop.example')",
@@ -266,6 +267,40 @@ describe.skipIf(!enabled)("product refresh candidate lifecycle", () => {
     )).rows[0]).toMatchObject({status: "discovered", attempt_count: 1})
   })
 
+  it("skips locked maintenance rows and still claims fresh work", async () => {
+    const brandId = await seed(pool)
+    const staleAt = new Date(Date.now() - 25 * 3600_000).toISOString()
+    await observe(pool, [
+      observation(brandId, staleAt, {identity_key: "stale-sku"}),
+      observation(brandId, new Date().toISOString(), {
+        identity_key: "fresh-sku",
+        product_url: "https://shop.example/product/fresh",
+      }),
+    ])
+
+    const lockClient = await openPipelineClient()
+    const claimClient = await openPipelineClient()
+    try {
+      await lockClient.query("BEGIN")
+      await lockClient.query(
+        "SELECT id FROM product_refresh_candidates WHERE identity_key='stale-sku' FOR UPDATE",
+      )
+      await claimClient.query("SET lock_timeout='500ms'")
+      const result = await claimClient.query<{result: Json[]}>(
+        "SELECT claim_product_refresh_candidates_v2(1,3,'KR','candidate-shop',false,24) AS result",
+      )
+      expect(result.rows[0].result).toHaveLength(1)
+      expect(result.rows[0].result[0]).toMatchObject({identity_key: "fresh-sku", status: "enriching"})
+    } finally {
+      await lockClient.query("ROLLBACK").catch(() => undefined)
+      await Promise.all([lockClient.end(), claimClient.end()])
+    }
+
+    expect((await pool.query(
+      "SELECT status FROM product_refresh_candidates WHERE identity_key='stale-sku'",
+    )).rows[0].status).toBe("discovered")
+  })
+
   it("refunds an expired changed-revision attempt before aging clears its token", async () => {
     const brandId = await seed(pool)
     const oldObservedAt = new Date(Date.now() - 25 * 3600_000).toISOString()
@@ -379,10 +414,18 @@ describe.skipIf(!enabled)("product refresh candidate lifecycle", () => {
     const first = (await pool.query<{result: Json}>(sql, [
       candidate.id, candidate.processing_token, candidate.observation_revision,
     ])).rows[0].result
-    expect(first).toMatchObject({outcome: "imported", product_id: expect.stringMatching(/^\d+$/)})
+    expect(first).toMatchObject({
+      outcome: "imported",
+      product_id: expect.stringMatching(/^\d+$/),
+      write_outcome: "inserted",
+    })
     expect((await pool.query<{result: Json}>(sql, [
       candidate.id, candidate.processing_token, candidate.observation_revision,
-    ])).rows[0].result).toEqual(first)
+    ])).rows[0].result).toEqual({
+      outcome: "imported",
+      product_id: first.product_id,
+      write_outcome: "unchanged",
+    })
     expect((await pool.query("SELECT count(*)::int AS count FROM products")).rows[0].count).toBe(1)
   })
 
@@ -473,6 +516,7 @@ describe.skipIf(!enabled)("product refresh candidate lifecycle", () => {
     expect(await publishNormalization(pool, candidate, product)).toEqual({
       outcome: "imported",
       product_id: product.id,
+      write_outcome: "updated",
     })
     const after = (await pool.query("SELECT * FROM products WHERE id=$1", [product.id])).rows[0]
     expect(after.category).toBe("tops")
@@ -485,6 +529,7 @@ describe.skipIf(!enabled)("product refresh candidate lifecycle", () => {
     expect(await publishNormalization(pool, candidate, product)).toEqual({
       outcome: "imported",
       product_id: product.id,
+      write_outcome: "unchanged",
     })
   })
 

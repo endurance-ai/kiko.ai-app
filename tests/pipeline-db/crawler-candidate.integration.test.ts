@@ -65,7 +65,10 @@ function rawProduct(observedAt: string, overrides: Partial<Product> = {}): Produ
 }
 
 async function seed(pool: Pool, observedAt: string, product = rawProduct(observedAt)) {
-  const brandId = (await pool.query<{id: string}>("INSERT INTO brand_nodes(brand_name,origin_country) VALUES ('Canonical Brand','KR') RETURNING id")).rows[0].id
+  const brandId = (await pool.query<{id: string}>(
+    `INSERT INTO brand_nodes(brand_name,wiki)
+     VALUES ('Canonical Brand','{"origin_country":"KR"}'::jsonb) RETURNING id`,
+  )).rows[0].id
   await pool.query("INSERT INTO product_refresh_sources(platform_key,platform_type,base_url) VALUES ('js-shop','shopify','https://shop.example')")
   await pool.query("SELECT upsert_product_refresh_observations($1::jsonb)", [JSON.stringify([{platform_key: "js-shop", identity_key: "sku-1",
     product_url: product.productUrl, raw_product: product, detected_brand: "Canonical Brand", matched_brand_node_id: brandId,

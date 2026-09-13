@@ -24,8 +24,7 @@ $$;
 CREATE TABLE public.brand_nodes (
   id bigserial PRIMARY KEY,
   brand_name text NOT NULL UNIQUE,
-  country text,
-  origin_country text,
+  wiki jsonb,
   status text NOT NULL DEFAULT 'active',
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
