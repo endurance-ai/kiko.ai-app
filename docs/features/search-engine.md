@@ -1,6 +1,6 @@
 # 검색 엔진
 
-> 상품 image embedding write는 migration 121의 URL/revision provenance 계약을 사용한다. 모든 caller가 `bulk_update_product_embeddings_v2`로 전환된 것을 확인한 뒤 migration 123을 별도로 적용한다. 이후 embedding 무효화는 현재 상품의 image URL/revision과 불일치하거나 provenance가 없는 행만 삭제하는 `invalidate_stale_product_embeddings_v2`를 사용한다. 상세 배포·복구 순서는 [`../../../kikoai/kikoai-handoff/pipeline-integrity/rollout-runbook.md`](../../../kikoai/kikoai-handoff/pipeline-integrity/rollout-runbook.md)를 따른다.
+> 상품 image embedding write는 migration 121의 URL/revision provenance 계약을 사용한다. Migration 123은 caller 배포 전에 `invalidate_stale_product_embeddings_v2`를 추가하며 기존 writer 권한은 유지한다. 모든 caller가 v2로 배포된 뒤 [`../../database/runbooks/post-rollout-revoke-legacy-product-embedding-writes.sql`](../../database/runbooks/post-rollout-revoke-legacy-product-embedding-writes.sql)을 배포 SHA와 함께 수동 적용해 legacy writer를 차단한다. 상세 배포·복구 순서는 [`../../../kikoai/kikoai-handoff/pipeline-integrity/rollout-runbook.md`](../../../kikoai/kikoai-handoff/pipeline-integrity/rollout-runbook.md)를 따른다.
 
 > `/api/find/search` (메인 플로우 Step 5) — **v6 embedding-first 단일 엔진** (SPEC-SEARCH-V6-001, 2026-05-18).
 > ~~`/api/search-products`~~ — **feature/redesign-admin에서 삭제됨** (v6 search-debugger 전환, `src/domains/search-v4/` 전체 제거).

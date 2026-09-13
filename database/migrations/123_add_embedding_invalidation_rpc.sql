@@ -1,4 +1,5 @@
--- Post-rollout gate: apply only after every embedding caller uses the v2 RPC.
+-- Expand phase: introduce the guarded invalidation RPC before caller rollout.
+-- This migration does not change existing legacy function or table privileges.
 BEGIN;
 
 CREATE OR REPLACE FUNCTION public.invalidate_stale_product_embeddings_v2(p_product_ids jsonb)
@@ -79,17 +80,10 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.bulk_update_product_embeddings(jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.bulk_update_product_embeddings(jsonb) FROM app_user, ai_user;
 REVOKE ALL ON FUNCTION public.invalidate_stale_product_embeddings_v2(jsonb) FROM PUBLIC;
 
-REVOKE INSERT, UPDATE, DELETE ON public.product_embeddings FROM app_user, ai_user;
-GRANT SELECT ON public.product_embeddings TO app_user, ai_user;
-GRANT EXECUTE ON FUNCTION public.bulk_update_product_embeddings_v2(jsonb) TO app_user, ai_user;
 GRANT EXECUTE ON FUNCTION public.invalidate_stale_product_embeddings_v2(jsonb) TO app_user, ai_user;
 
-COMMENT ON FUNCTION public.bulk_update_product_embeddings(jsonb) IS
-  'RETIRED after v2 caller rollout. Normal roles cannot execute this provenance-free writer.';
 COMMENT ON FUNCTION public.invalidate_stale_product_embeddings_v2(jsonb) IS
   'Deletes only legacy or stale embeddings whose provenance does not match the current product image generation.';
 

@@ -171,6 +171,8 @@ jobs:
             const fs = require("fs")
             let migrations = []
 
+            // database/runbooks/** is intentionally excluded. Contract-phase
+            // permission gates there require explicit rollout verification.
             const isMigration = (name) => /^database\/migrations\/.+\.sql$/.test(name)
             const pick = (files) => files
               .filter((file) => file.status !== "removed")
