@@ -94,7 +94,6 @@ jobs:
 
       - name: 테스트
         run: pnpm run test
-        continue-on-error: true  # 테스트 인프라 안정화 전까지 임시 — TODO 제거
 
   # ============================================
   # Job 2: 빌드 + ECR Push
