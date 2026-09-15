@@ -23,11 +23,14 @@ export interface PdpTarget {
 
 export default function ProductPdp({
   target,
+  threadId = null,
   onClose,
   onRequery,
   escDisabled = false,
 }: {
   target: PdpTarget | null
+  /** Search thread attribution. Non-search surfaces intentionally leave this null. */
+  threadId?: string | null
   onClose: () => void
   onRequery: (name: string, mode: "similar" | "cheaper") => void
   /** 다른 모달(챗 cap 모달 등)이 Esc 우선권을 가질 때 true — PDP는 Esc를 무시 */
@@ -82,6 +85,7 @@ export default function ProductPdp({
             <PdpBody
               key={effective.id}
               target={effective}
+              threadId={threadId}
               onClose={onClose}
               onOpen={setChainTarget}
               onRequery={onRequery}
@@ -99,11 +103,13 @@ export default function ProductPdp({
 // 상세는 GET /v1/products/{id} (프록시)에서 채운다 — 도착 전엔 카드 fallback으로 즉시 렌더.
 function PdpBody({
   target,
+  threadId,
   onClose,
   onOpen,
   onRequery,
 }: {
   target: PdpTarget
+  threadId: string | null
   onClose: () => void
   onOpen: (t: PdpTarget) => void
   onRequery: (name: string, mode: "similar" | "cheaper") => void
@@ -215,7 +221,12 @@ function PdpBody({
               rel="noopener noreferrer"
               onClick={() =>
                 // 계측: 외부몰 이동 = outbound_click (인게이지먼트 KPI 분자)
-                track("outbound_click", { product_id: target.id, brand, url: buyUrl })
+                track("outbound_click", {
+                  product_id: target.id,
+                  brand,
+                  url: buyUrl,
+                  thread_id: threadId,
+                })
               }
             >
               Buy <ExternalArrowIcon size={15} />
