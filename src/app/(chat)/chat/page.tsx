@@ -607,6 +607,7 @@ function ChatPageInner() {
 
       <ProductPdp
         target={openPdp}
+        threadId={getChatStore().sessionId}
         escDisabled={capModalOpen}
         onClose={() => setOpenPdp(null)}
         onRequery={(name, mode) => {
