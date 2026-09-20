@@ -123,6 +123,8 @@ export async function POST(req: Request) {
         gender: body.gender ?? null,
         price_max: body.price_max ?? null,
         attached_image_url: body.attached_image_url ?? null,
+        // 홍보 랜딩 서피스 — ai-server 가 웹 전용 카드 상향 + 최소 카드 보장을 켠다.
+        surface: "web_explore",
       }
 
   let upstreamRes: Response
