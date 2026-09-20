@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } fro
 import { useRouter } from "next/navigation"
 import { BorderBeam } from "border-beam"
 import styles from "../chat.module.css"
-import FinderSection from "../_components/FinderSection"
+// 카테고리 파인더 숨김(2026-09-21) — 복원하려면 이 import 와 아래 렌더/스크롤힌트 주석을 함께 해제.
+// import CategoryFinder from "../_components/CategoryFinder"
 import { EXAMPLES_BY_GENDER } from "../_lib/examples"
 import { track } from "@/lib/analytics"
 
@@ -202,8 +203,8 @@ export default function ExplorePage() {
         </BorderBeam>
       </div>
 
-      {/* 스크롤 힌트 — SF Symbols chevron.compact.down 지오메트리 재현.
-          히어로 아래 카테고리 파인더가 접혀 있다는 신호 + 탭 시 스무스 스크롤 */}
+      {/* 카테고리 파인더 숨김(2026-09-21) — 스크롤 힌트도 파인더와 짝지어 주석 처리.
+          복원하려면 아래 스크롤 힌트 블록 + 카테고리 파인더 렌더 + 상단 import 를 함께 해제.
       <button
         type="button"
         className={styles.scrollHint}
@@ -214,13 +215,12 @@ export default function ExplorePage() {
           <path d="M2.5 2.5L15 9.5L27.5 2.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+      */}
     </section>
 
-    {/* nav(100px) 아래로 스크롤 걸리도록 여유를 준 anchor — daydream: 히어로=풀뷰포트 컴포저,
-        스크롤 아래=browse/finder */}
-    <section id="finder" style={{ scrollMarginTop: 90 }}>
-      <FinderSection gender={gender === "female" ? "여성" : "남성"} />
-    </section>
+    {/* 카테고리 파인더(브라우징) 숨김(2026-09-21) — 복원하려면 이 렌더 한 줄 + 상단 import + 위 스크롤 힌트 주석 해제
+    <CategoryFinder gender={gender === "female" ? "여성" : "남성"} />
+    */}
     </>
   )
 }
