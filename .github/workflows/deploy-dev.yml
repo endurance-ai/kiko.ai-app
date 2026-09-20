@@ -268,6 +268,18 @@ jobs:
 
             rm -rf "$MIGRATION_ROOT"
 
+      # 배포 스크립트를 repo 를 source of truth 로 박스에 설치(드리프트 방지).
+      # 과거엔 박스 로컬본을 그냥 실행 → `up -d app`(--no-deps 누락)이 depends_on 인
+      # db 까지 재생성해 dev-ai(ai-server) DB 풀을 죽이는 사고가 있었다. repo 관리로 전환.
+      - name: deploy 스크립트 업로드 (repo = source of truth)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "scripts/deploy.app.sh"
+          target: "/tmp/kikoai-app-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
+
       - name: SSH 배포
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -275,7 +287,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -euo pipefail
+            UP="/tmp/kikoai-app-deploy-${{ github.run_id }}-${{ github.run_attempt }}/scripts/deploy.app.sh"
             echo "=========================================="
             echo "[kiko.ai-app DEV] 배포 시작"
             echo "=========================================="
+            install -m 0755 "$UP" /home/ec2-user/scripts/deploy.app.sh
+            rm -rf "/tmp/kikoai-app-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
             /home/ec2-user/scripts/deploy.app.sh ${{ needs.build-and-push.outputs.image_tag }}
