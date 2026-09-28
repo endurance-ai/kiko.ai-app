@@ -63,11 +63,66 @@ env:
   ECR_REPOSITORY: kikoai-dev/app
 
 jobs:
+  audit-gender-source:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/fix-gender-source-migration-20260928'
+    name: dev DB 성별 출처 읽기 전용 점검
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: dev DB 집계 확인
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            DB_CONTAINER="${DB_CONTAINER:-db}"
+            DB_NAME=$(docker exec "$DB_CONTAINER" sh -lc 'printf "%s" "${POSTGRES_DB:-postgres}"')
+            DB_USER=$(docker exec "$DB_CONTAINER" sh -lc 'printf "%s" "${POSTGRES_USER:-postgres}"')
+            docker exec -i "$DB_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" <<'SQL'
+            BEGIN READ ONLY;
+            DO $audit$
+            DECLARE
+              has_column boolean;
+              total_rows bigint;
+              nonnull_rows bigint;
+              invalid_rows bigint;
+              has_constraint boolean;
+            BEGIN
+              SELECT EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid = 'public.products'::regclass
+                  AND attname = 'gender_source' AND NOT attisdropped
+              ) INTO has_column;
+              SELECT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = 'public.products'::regclass
+                  AND conname = 'products_gender_source_chk'
+              ) INTO has_constraint;
+              RAISE NOTICE 'gender_source_column_exists=% constraint_exists=%', has_column, has_constraint;
+              IF has_column THEN
+                EXECUTE 'SELECT count(*), count(gender_source), count(*) FILTER (
+                  WHERE gender_source IS NOT NULL AND gender_source <> ALL (ARRAY[
+                    ''engine'', ''url'', ''text'', ''config_default'', ''brand_scope'', ''llm'',
+                    ''legacy_backfill'', ''repair_url'', ''repair_text'', ''repair_brand_scope'',
+                    ''unverified_legacy''
+                  ]::text[])
+                ) FROM public.products' INTO total_rows, nonnull_rows, invalid_rows;
+                RAISE NOTICE 'total_rows=% nonnull_source_rows=% invalid_source_rows=%',
+                  total_rows, nonnull_rows, invalid_rows;
+              END IF;
+            END
+            $audit$;
+            COMMIT;
+            SQL
+
   # ============================================
   # Job 1: 검증 (lint + test)
   # ============================================
   verify:
     name: 검증 (lint + test)
+    if: github.event_name != 'workflow_dispatch'
     # fork PR 가드는 필요 없다 — push 는 이미 dev 에 들어온 코드다.
     runs-on: ubuntu-24.04-arm
 
@@ -100,6 +155,7 @@ jobs:
   # ============================================
   build-and-push:
     name: 빌드 및 ECR Push
+    if: github.event_name != 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-24.04-arm
 
@@ -154,6 +210,7 @@ jobs:
   # ============================================
   deploy:
     name: dev-app 배포
+    if: github.event_name != 'workflow_dispatch'
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: dev
