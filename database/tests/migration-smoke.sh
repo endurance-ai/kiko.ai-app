@@ -38,7 +38,13 @@ CREATE TABLE public.products (id bigserial PRIMARY KEY);
 INSERT INTO public.products DEFAULT VALUES;
 SQL
   psql_checked -f database/migrations/093_products_gender_source.sql
+  constraint_oid_before=$(psql_checked -At -c "SELECT oid FROM pg_constraint WHERE conrelid = 'public.products'::regclass AND conname = 'products_gender_source_chk'")
   psql_checked -f database/migrations/093_products_gender_source.sql
+  constraint_oid_after=$(psql_checked -At -c "SELECT oid FROM pg_constraint WHERE conrelid = 'public.products'::regclass AND conname = 'products_gender_source_chk'")
+  [[ "$constraint_oid_before" == "$constraint_oid_after" ]] || {
+    echo 'Rerunning the migration replaced the existing constraint' >&2
+    exit 1
+  }
   psql_checked <<'SQL'
 INSERT INTO public.products (gender_source)
 SELECT unnest(ARRAY[
