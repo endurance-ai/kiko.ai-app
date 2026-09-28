@@ -89,6 +89,9 @@ jobs:
               nonnull_rows bigint;
               invalid_rows bigint;
               has_constraint boolean;
+              constraint_validated boolean;
+              constraint_definition text;
+              column_type text;
             BEGIN
               SELECT EXISTS (
                 SELECT 1 FROM pg_attribute
@@ -102,6 +105,10 @@ jobs:
               ) INTO has_constraint;
               RAISE NOTICE 'gender_source_column_exists=% constraint_exists=%', has_column, has_constraint;
               IF has_column THEN
+                SELECT format_type(atttypid, atttypmod) INTO column_type
+                FROM pg_attribute
+                WHERE attrelid = 'public.products'::regclass
+                  AND attname = 'gender_source' AND NOT attisdropped;
                 EXECUTE 'SELECT count(*), count(gender_source), count(*) FILTER (
                   WHERE gender_source IS NOT NULL AND gender_source <> ALL (ARRAY[
                     ''engine'', ''url'', ''text'', ''config_default'', ''brand_scope'', ''llm'',
@@ -111,6 +118,16 @@ jobs:
                 ) FROM public.products' INTO total_rows, nonnull_rows, invalid_rows;
                 RAISE NOTICE 'total_rows=% nonnull_source_rows=% invalid_source_rows=%',
                   total_rows, nonnull_rows, invalid_rows;
+                RAISE NOTICE 'gender_source_column_type=%', column_type;
+              END IF;
+              IF has_constraint THEN
+                SELECT convalidated, pg_get_constraintdef(oid)
+                  INTO constraint_validated, constraint_definition
+                FROM pg_constraint
+                WHERE conrelid = 'public.products'::regclass
+                  AND conname = 'products_gender_source_chk';
+                RAISE NOTICE 'constraint_validated=% definition=%',
+                  constraint_validated, constraint_definition;
               END IF;
             END
             $audit$;
