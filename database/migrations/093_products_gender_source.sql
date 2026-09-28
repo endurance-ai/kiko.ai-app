@@ -5,21 +5,30 @@ BEGIN;
 
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS gender_source text;
 
-ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_gender_source_chk;
-ALTER TABLE public.products ADD CONSTRAINT products_gender_source_chk
-  CHECK (gender_source IS NULL OR gender_source IN (
-    'engine',
-    'url',
-    'text',
-    'config_default',
-    'brand_scope',
-    'llm',
-    'legacy_backfill',
-    'repair_url',
-    'repair_text',
-    'repair_brand_scope',
-    'unverified_legacy'
-  )) NOT VALID;
+DO $gender_source_constraint$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.products'::regclass
+      AND conname = 'products_gender_source_chk'
+  ) THEN
+    ALTER TABLE public.products ADD CONSTRAINT products_gender_source_chk
+      CHECK (gender_source IS NULL OR gender_source IN (
+        'engine',
+        'url',
+        'text',
+        'config_default',
+        'brand_scope',
+        'llm',
+        'legacy_backfill',
+        'repair_url',
+        'repair_text',
+        'repair_brand_scope',
+        'unverified_legacy'
+      )) NOT VALID;
+  END IF;
+END
+$gender_source_constraint$;
 
 COMMENT ON COLUMN public.products.gender_source IS
   'products.gender의 근거. NULL은 마이그레이션 이전 행 또는 출처 미확인 행이다.';
@@ -27,4 +36,15 @@ COMMENT ON COLUMN public.products.gender_source IS
 COMMIT;
 
 -- 기존 행 검사는 쓰기 트랜잭션 밖에서 수행한다.
-ALTER TABLE public.products VALIDATE CONSTRAINT products_gender_source_chk;
+DO $gender_source_validation$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.products'::regclass
+      AND conname = 'products_gender_source_chk'
+      AND NOT convalidated
+  ) THEN
+    ALTER TABLE public.products VALIDATE CONSTRAINT products_gender_source_chk;
+  END IF;
+END
+$gender_source_validation$;
